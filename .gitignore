@@ -76,7 +76,7 @@ datasets/
 
 # Logs
 *.log
-logs/
+# logs/  # 开发日志目录需要跟踪
 wandb/
 runs/
 tensorboard_logs/
