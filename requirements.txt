@@ -2,9 +2,9 @@
 # Python >= 3.8
 
 # 深度学习框架
-torch==2.1.0
-torchvision==0.16.0
-transformers==4.35.0
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.35.0
 
 # 视觉大模型
 clip @ git+https://github.com/openai/CLIP.git
