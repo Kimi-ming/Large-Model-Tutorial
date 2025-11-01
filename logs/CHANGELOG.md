@@ -10,6 +10,7 @@
 
 ```
 logs/
+├── CHANGELOG.md                                    # 本文档（总览）
 ├── development/          # 开发日志
 │   ├── 2025-11-01-project-initialization.md
 │   ├── 2025-11-01-model-research-docs.md
@@ -35,7 +36,7 @@ logs/
 ### 第一阶段：项目初始化与基础设施搭建
 
 **日期**: 2025-11-01  
-**详细日志**: [`logs/development/2025-11-01-project-initialization.md`](logs/development/2025-11-01-project-initialization.md)
+**详细日志**: [`development/2025-11-01-project-initialization.md`](development/2025-11-01-project-initialization.md)
 
 #### ✨ 新增功能
 
@@ -89,7 +90,7 @@ logs/
 ### 第二阶段：模型调研与选型章节开发
 
 **日期**: 2025-11-01  
-**详细日志**: [`logs/development/2025-11-01-model-research-docs.md`](logs/development/2025-11-01-model-research-docs.md)
+**详细日志**: [`development/2025-11-01-model-research-docs.md`](development/2025-11-01-model-research-docs.md)
 
 #### ✨ 新增功能
 
@@ -126,7 +127,7 @@ logs/
 ### 第三阶段：Benchmark 测试工具开发
 
 **日期**: 2025-11-01  
-**详细日志**: [`logs/development/2025-11-01-benchmark-tools.md`](logs/development/2025-11-01-benchmark-tools.md)
+**详细日志**: [`development/2025-11-01-benchmark-tools.md`](development/2025-11-01-benchmark-tools.md)
 
 #### ✨ 新增功能
 
@@ -175,7 +176,7 @@ logs/
 
 **日期**: 2025-11-01  
 **优先级**: High + Medium  
-**详细日志**: [`logs/bugfix/2025-11-01-fix-documentation-quality.md`](logs/bugfix/2025-11-01-fix-documentation-quality.md)
+**详细日志**: [`bugfix/2025-11-01-fix-documentation-quality.md`](bugfix/2025-11-01-fix-documentation-quality.md)
 
 #### 🐛 修复内容
 
@@ -198,7 +199,7 @@ logs/
 
 **日期**: 2025-11-01  
 **优先级**: High + Medium  
-**详细日志**: [`logs/bugfix/2025-11-01-fix-script-references.md`](logs/bugfix/2025-11-01-fix-script-references.md)
+**详细日志**: [`bugfix/2025-11-01-fix-script-references.md`](bugfix/2025-11-01-fix-script-references.md)
 
 #### 🐛 修复内容
 
@@ -225,7 +226,7 @@ logs/
 
 **日期**: 2025-11-01  
 **优先级**: High（严重Bug）  
-**详细日志**: [`logs/bugfix/2025-11-01-fix-recall-calculation.md`](logs/bugfix/2025-11-01-fix-recall-calculation.md)
+**详细日志**: [`bugfix/2025-11-01-fix-recall-calculation.md`](bugfix/2025-11-01-fix-recall-calculation.md)
 
 #### 🐛 修复内容
 
