@@ -1,0 +1,119 @@
+name: 📋 任务开发
+description: 创建一个开发任务（从TODO清单拆分）
+title: "[任务] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您参与视觉大模型教程的开发！请填写以下信息。
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      description: 任务优先级（对应版本）
+      options:
+        - P0-MVP (v0.5最小可用版本)
+        - P1-v1.0 (v1.0正式版本)
+        - P2-v1.5 (v1.5增强版本)
+        - P3-future (未来版本)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: role
+    attributes:
+      label: 角色分类
+      description: 任务属于哪个角色
+      options:
+        - 📚教程必需 (学习者核心内容)
+        - 🔧维护者 (工程化/维护)
+        - 两者都是
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: 任务类型
+      description: 任务的主要类型
+      options:
+        - 文档
+        - 代码
+        - 脚本
+        - 测试
+        - CI/CD
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 所属阶段
+      description: 对应TODO清单的哪个阶段
+      options:
+        - 第一阶段：基础框架搭建
+        - 第二阶段：模型调研与选型
+        - 第三阶段：模型微调
+        - 第四阶段：数据集准备
+        - 第五阶段：多平台部署
+        - 第六阶段：补充内容和高级主题
+        - 第七阶段：质量保证和测试
+        - 第八阶段：发布和社区建设
+        - 持续维护
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 任务描述
+      description: 详细描述要完成的任务
+      placeholder: |
+        从TODO清单复制任务详情...
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: 交付物
+      description: 列出需要交付的文件或功能
+      placeholder: |
+        - [ ] 文件1
+        - [ ] 文件2
+        - [ ] 功能3
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 如何验证任务已完成
+      placeholder: |
+        - [ ] 标准1
+        - [ ] 标准2
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 依赖任务
+      description: 此任务依赖哪些其他任务（可选）
+      placeholder: |
+        #Issue编号
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 备注
+      description: 其他需要说明的信息（可选）
+    validations:
+      required: false
+

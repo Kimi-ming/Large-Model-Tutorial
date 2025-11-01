@@ -1,0 +1,11 @@
+name: large-model-tutorial
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip>=23.0
+  - pip:
+      - -r requirements.txt
+
