@@ -30,8 +30,9 @@ echo ""
 echo -e "${BLUE}[3/5] 测试数据准备${NC}"
 if [ ! "$(ls -A data/test_dataset/*.jpg 2>/dev/null)" ]; then
     echo -e "${YELLOW}⚠️  测试数据不存在，请先准备测试图像：${NC}"
-    echo "   方案1：手动放置测试图像到 data/test_dataset/"
-    echo "   方案2：运行 python scripts/prepare_test_data.py"
+    echo "   方案1：手动放置测试图像（JPG格式）到 data/test_dataset/"
+    echo "   方案2：使用wget下载示例图像："
+    echo "          wget -P data/test_dataset/ <图像URL>"
     echo ""
     echo "跳过实际测试，仅生成示例报告..."
     USE_DEMO_DATA=true
