@@ -28,16 +28,33 @@ class ModelLoader:
             'default_repo': 'openai/clip-vit-base-patch32',
             'model_class': CLIPModel,
             'processor_class': CLIPProcessor,
+            'dependencies': ['transformers'],
+        },
+        'sam': {
+            'default_repo': 'facebook/sam-vit-base',
+            'model_class': AutoModel,
+            'processor_class': AutoProcessor,
+            'dependencies': ['transformers', 'segment-anything'],
+            'notes': '需要安装: pip install git+https://github.com/facebookresearch/segment-anything.git',
         },
         'blip2': {
             'default_repo': 'Salesforce/blip2-opt-2.7b',
             'model_class': AutoModel,
             'processor_class': AutoProcessor,
+            'dependencies': ['transformers'],
         },
         'llava': {
             'default_repo': 'liuhaotian/llava-v1.5-7b',
             'model_class': AutoModel,
             'processor_class': AutoProcessor,
+            'dependencies': ['transformers'],
+        },
+        'qwen-vl': {
+            'default_repo': 'Qwen/Qwen-VL-Chat',
+            'model_class': AutoModel,
+            'processor_class': AutoProcessor,
+            'dependencies': ['transformers>=4.32.0', 'transformers_stream_generator'],
+            'notes': '需要安装: pip install transformers_stream_generator',
         },
     }
     
@@ -52,6 +69,33 @@ class ModelLoader:
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
         logger.info(f"ModelLoader initialized with cache_dir: {self.cache_dir}")
     
+    def _check_dependencies(self, model_name: str):
+        """
+        检查模型依赖
+        
+        Args:
+            model_name: 模型名称
+        """
+        model_info = self.SUPPORTED_MODELS[model_name]
+        dependencies = model_info.get('dependencies', [])
+        
+        missing_deps = []
+        for dep in dependencies:
+            # 解析依赖名（去除版本号）
+            dep_name = dep.split('>=')[0].split('==')[0].replace('-', '_')
+            try:
+                __import__(dep_name)
+            except ImportError:
+                missing_deps.append(dep)
+        
+        if missing_deps:
+            notes = model_info.get('notes', '')
+            logger.warning(
+                f"模型 {model_name} 缺少依赖: {', '.join(missing_deps)}\n"
+                f"建议安装: pip install {' '.join(missing_deps)}\n"
+                f"{notes}"
+            )
+    
     def load_model(
         self,
         model_name: str,
@@ -65,7 +109,7 @@ class ModelLoader:
         加载模型和处理器
         
         Args:
-            model_name: 模型名称 (clip, blip2, llava, 等)
+            model_name: 模型名称 (clip, sam, blip2, llava, qwen-vl 等)
             model_path: 模型路径，可以是:
                 - 本地路径 (如: ./models/clip)
                 - HuggingFace repo ID (如: openai/clip-vit-base-patch32)
@@ -90,6 +134,9 @@ class ModelLoader:
             )
         
         model_info = self.SUPPORTED_MODELS[model_name]
+        
+        # 检查依赖
+        self._check_dependencies(model_name)
         
         # 确定模型路径
         if model_path is None:

@@ -20,11 +20,12 @@
 # 参数：
 #   --skip-gpu-check    跳过GPU检测（CPU-only模式）
 #   --no-verify         跳过环境验证
+#   --yes, -y           非交互模式
 #   --help              显示帮助信息
 #
 ###############################################################################
 
-set -e  # 遇到错误立即退出
+set -euo pipefail  # 遇到错误立即退出，未定义变量报错，管道任一命令失败则失败
 
 # 颜色定义
 RED='\033[0;31m'
@@ -37,6 +38,12 @@ NC='\033[0m' # No Color
 MIN_PYTHON_VERSION="3.8"
 SKIP_GPU_CHECK=false
 NO_VERIFY=false
+NON_INTERACTIVE=false
+
+# 检查非交互模式环境变量
+if [ "${CI:-false}" = "true" ] || [ "${DEBIAN_FRONTEND:-}" = "noninteractive" ] || [ -n "${FORCE_NON_INTERACTIVE:-}" ]; then
+    NON_INTERACTIVE=true
+fi
 
 ###############################################################################
 # 工具函数
@@ -81,6 +88,7 @@ show_help() {
 选项：
     --skip-gpu-check    跳过GPU检测（适用于CPU-only环境）
     --no-verify         跳过最终的环境验证步骤
+    --yes, -y           非交互模式（自动确认所有提示）
     --help              显示此帮助信息
 
 示例：
@@ -114,6 +122,10 @@ parse_args() {
                 ;;
             --no-verify)
                 NO_VERIFY=true
+                shift
+                ;;
+            --yes|-y)
+                NON_INTERACTIVE=true
                 shift
                 ;;
             --help|-h)
@@ -272,6 +284,15 @@ check_gpu() {
 # 依赖安装
 ###############################################################################
 
+detect_network_region() {
+    """检测网络区域（是否在国内）"""
+    if curl -s --connect-timeout 3 http://www.google.com > /dev/null 2>&1; then
+        return 1  # 国外
+    else
+        return 0  # 国内
+    fi
+}
+
 install_dependencies() {
     print_step "安装Python依赖包..."
     
@@ -285,27 +306,60 @@ install_dependencies() {
     echo ""
     
     # 升级pip
-    python3 -m pip install --upgrade pip setuptools wheel
+    print_info "升级pip..."
+    python3 -m pip install --upgrade pip setuptools wheel || true
+    
+    # 检测网络并选择镜像源
+    local pip_index=""
+    if detect_network_region; then
+        print_info "检测到国内网络环境，使用清华镜像源加速"
+        pip_index="-i https://pypi.tuna.tsinghua.edu.cn/simple"
+    else
+        print_info "使用官方PyPI源"
+    fi
     
     # 安装依赖
-    if python3 -m pip install -r requirements.txt; then
+    if python3 -m pip install -r requirements.txt $pip_index; then
         print_success "依赖安装完成"
     else
-        print_error "依赖安装失败"
-        print_error "请检查网络连接或使用国内镜像源"
-        echo ""
-        echo "使用清华镜像源的方法："
-        echo "  pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple"
-        echo ""
-        echo "临时使用镜像源："
-        echo "  pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple"
-        exit 1
+        print_warning "使用主镜像源安装失败，尝试备用镜像源..."
+        
+        # 尝试备用镜像源
+        local backup_mirrors=(
+            "https://pypi.tuna.tsinghua.edu.cn/simple"
+            "https://mirrors.aliyun.com/pypi/simple"
+            "https://pypi.mirrors.ustc.edu.cn/simple"
+        )
+        
+        local success=false
+        for mirror in "${backup_mirrors[@]}"; do
+            print_info "尝试镜像源: $mirror"
+            if python3 -m pip install -r requirements.txt -i "$mirror"; then
+                print_success "使用镜像源 $mirror 安装成功"
+                success=true
+                break
+            fi
+        done
+        
+        if [ "$success" = false ]; then
+            print_error "所有镜像源都安装失败"
+            print_error "请检查网络连接或手动安装依赖"
+            echo ""
+            echo "手动安装方法："
+            echo "  pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple"
+            exit 1
+        fi
     fi
 }
 
 install_dev_dependencies() {
     if [ -f "requirements-dev.txt" ]; then
         print_step "安装开发依赖（可选）..."
+        
+        if [ "$NON_INTERACTIVE" = true ]; then
+            print_info "非交互模式：跳过开发依赖安装"
+            return 0
+        fi
         
         read -p "是否安装开发依赖（用于代码检查、测试等）？[y/N] " -n 1 -r
         echo ""

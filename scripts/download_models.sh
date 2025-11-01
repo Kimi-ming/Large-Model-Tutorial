@@ -47,6 +47,12 @@ MODELS_DIR="models"
 USE_MIRROR=false
 MIRROR_URL="https://hf-mirror.com"
 HF_ENDPOINT="https://huggingface.co"
+NON_INTERACTIVE=false
+
+# 检查非交互模式环境变量
+if [ "${CI:-false}" = "true" ] || [ "${DEBIAN_FRONTEND:-}" = "noninteractive" ] || [ -n "${FORCE_NON_INTERACTIVE:-}" ]; then
+    NON_INTERACTIVE=true
+fi
 
 ###############################################################################
 # 工具函数
@@ -96,6 +102,7 @@ show_help() {
     --all-p0            下载所有P0（MVP）阶段需要的模型
     --mirror            使用HuggingFace镜像源（国内推荐）
     --models-dir DIR    指定模型保存目录（默认: models/）
+    --yes, -y           非交互模式（自动确认所有提示）
     --help              显示此帮助信息
 
 支持的模型名称：
@@ -133,14 +140,14 @@ EOF
 ###############################################################################
 
 # 定义模型信息
-# 格式: 简称|HuggingFace仓库ID|描述|大小|P0标记
+# 格式: 简称|HuggingFace仓库ID|描述|大小|P0标记|依赖说明
 declare -A MODEL_INFO
 MODEL_INFO=(
-    ["clip"]="openai/clip-vit-base-patch32|OpenAI CLIP - 图文多模态模型|~600MB|P0"
-    ["sam"]="facebook/sam-vit-base|Meta SAM - 图像分割基础模型|~360MB|P0"
-    ["llava"]="liuhaotian/llava-v1.5-7b|LLaVA 1.5 - 视觉问答模型 7B|~13GB|P0"
-    ["blip2"]="Salesforce/blip2-opt-2.7b|BLIP-2 - 图像理解模型 2.7B|~5.5GB|P1"
-    ["qwen-vl"]="Qwen/Qwen-VL-Chat|通义千问视觉版|~9GB|P1"
+    ["clip"]="openai/clip-vit-base-patch32|OpenAI CLIP - 图文多模态模型|~600MB|P0|无额外依赖"
+    ["sam"]="facebook/sam-vit-base|Meta SAM - 图像分割基础模型|~360MB|P0|需要: pip install segment-anything"
+    ["llava"]="liuhaotian/llava-v1.5-7b|LLaVA 1.5 - 视觉问答模型 7B|~13GB|P0|无额外依赖"
+    ["blip2"]="Salesforce/blip2-opt-2.7b|BLIP-2 - 图像理解模型 2.7B|~5.5GB|P1|无额外依赖"
+    ["qwen-vl"]="Qwen/Qwen-VL-Chat|通义千问视觉版|~9GB|P1|需要: pip install transformers_stream_generator"
 )
 
 # P0模型列表（MVP阶段必需）
@@ -179,12 +186,20 @@ setup_mirror() {
             print_info "使用官方HuggingFace源"
         else
             print_warning "检测到网络可能在国内，建议使用 --mirror 选项"
-            read -p "是否使用镜像源加速下载？[Y/n] " -n 1 -r
-            echo ""
-            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            
+            if [ "$NON_INTERACTIVE" = true ]; then
+                print_info "非交互模式：自动启用镜像源"
                 USE_MIRROR=true
                 export HF_ENDPOINT="$MIRROR_URL"
                 print_success "已启用镜像源"
+            else
+                read -p "是否使用镜像源加速下载？[Y/n] " -n 1 -r
+                echo ""
+                if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                    USE_MIRROR=true
+                    export HF_ENDPOINT="$MIRROR_URL"
+                    print_success "已启用镜像源"
+                fi
             fi
         fi
     fi
@@ -200,12 +215,15 @@ download_model() {
         return 1
     fi
     
-    IFS='|' read -r repo_id description size priority <<< "$info"
+    IFS='|' read -r repo_id description size priority dependencies <<< "$info"
     
     print_header "下载模型: $model_key"
     print_info "仓库: $repo_id"
     print_info "描述: $description"
     print_info "大小: $size"
+    if [ "$dependencies" != "无额外依赖" ]; then
+        print_warning "依赖: $dependencies"
+    fi
     echo ""
     
     # 创建模型目录
@@ -236,7 +254,11 @@ try:
         local_dir=local_dir,
         local_dir_use_symlinks=False,
         resume_download=True,
-        allow_patterns=["*.json", "*.txt", "*.model", "*.safetensors", "*.bin", "*.py"],
+        allow_patterns=[
+            "*.json", "*.txt", "*.model", "*.safetensors", "*.bin", "*.py",
+            "tokenizer.*", "merges.txt", "vocab.*", "*.tiktoken",
+            "preprocessor_config.json", "generation_config.json"
+        ],
         ignore_patterns=["*.msgpack", "*.h5", "*.ot"],
     )
     
@@ -332,11 +354,15 @@ interactive_download() {
     done
     echo ""
     
-    read -p "确认下载？[Y/n] " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
-        print_info "已取消"
-        exit 0
+    if [ "$NON_INTERACTIVE" = false ]; then
+        read -p "确认下载？[Y/n] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            print_info "已取消"
+            exit 0
+        fi
+    else
+        print_info "非交互模式：自动确认下载"
     fi
 }
 
@@ -366,6 +392,10 @@ main() {
             --models-dir)
                 MODELS_DIR="$2"
                 shift 2
+                ;;
+            --yes|-y)
+                NON_INTERACTIVE=true
+                shift
                 ;;
             -*)
                 print_error "未知选项: $1"
