@@ -41,8 +41,12 @@ python code/01-model-evaluation/benchmark/memory_test.py \
 
 **准确率测试**：
 ```bash
+# 运行CLIP图文检索测试
 python code/01-model-evaluation/benchmark/accuracy_test.py \
     --model openai/clip-vit-base-patch32
+
+# 运行单元测试（验证Recall@K计算逻辑）
+python code/01-model-evaluation/benchmark/accuracy_test.py --test
 ```
 
 ### 3. 生成可视化报告
