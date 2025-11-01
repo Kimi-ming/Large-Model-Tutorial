@@ -115,10 +115,20 @@ pip install GPUtil  # 用于更详细的GPU监控
 
 测试需要一些图像数据，可以通过以下方式准备：
 
-1. **手动准备**：将测试图像（JPG格式）放入 `data/test_dataset/` 目录
+1. **手动准备**（推荐）：将测试图像（JPG格式）放入 `data/test_dataset/` 目录
+   - 至少准备10张图像即可进行测试
+   - 图像内容不限，不需要标注
 
-2. **使用公开数据集**（需要实现 `scripts/prepare_test_data.py`）：
+2. **从网络下载示例图像**：
    ```bash
+   mkdir -p data/test_dataset
+   wget -P data/test_dataset/ https://images.unsplash.com/photo-1574158622682-e40e69881006 -O data/test_dataset/cat.jpg
+   wget -P data/test_dataset/ https://images.unsplash.com/photo-1587300003388-59208cc962cb -O data/test_dataset/dog.jpg
+   ```
+
+3. **使用公开数据集**（需要额外实现脚本）：
+   ```bash
+   # 此脚本需要自行实现
    python scripts/prepare_test_data.py --dataset coco --num_samples 100
    ```
 
