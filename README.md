@@ -10,7 +10,7 @@
 **从零开始学习视觉大模型的完整教程**  
 *模型调研 → 微调训练 → 多平台部署 → 实际应用*
 
-[快速开始](#-快速开始) • [文档](#-教程内容) • [示例代码](#-代码示例) • [常见问题](FAQ.md)
+[快速开始](#-快速开始) • [文档](#-教程内容) • [示例代码](#-代码示例) • [开发日志](logs/CHANGELOG.md) • [常见问题](FAQ.md)
 
 </div>
 
@@ -326,6 +326,8 @@ learning_rate = config.get("training.learning_rate")
 - [x] 基础工具库
 - [x] 快速开始文档
 - [x] CLIP推理示例
+- [x] 模型调研文档（第一部分）
+- [x] Benchmark测试工具
 
 ### v1.0 正式版（规划中）
 
@@ -350,7 +352,7 @@ learning_rate = config.get("training.learning_rate")
 - [ ] 在线演示平台
 - [ ] 视频教程
 
-详见 [项目路线图](ROADMAP.md)（开发中）
+详见 [项目路线图](ROADMAP.md)（开发中） | [开发日志](logs/CHANGELOG.md)
 
 ---
 
