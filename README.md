@@ -73,16 +73,26 @@ python -c "import torch; print('✓ PyTorch:', torch.__version__)"
 
 ### 运行第一个示例
 
+**方式1：使用快速开始脚本（推荐）**
+
+```bash
+# 运行快速开始示例（自动下载示例图像）
+python quick_start_clip.py
+```
+
+**方式2：使用Python代码**
+
 ```python
-from code.utils import load_model_simple
+from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 
 # 加载CLIP模型
-model, processor = load_model_simple('clip')
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 # 准备图像和文本
 image = Image.open("your_image.jpg")
-texts = ["一只猫", "一只狗", "一辆汽车"]
+texts = ["a photo of a dog", "a photo of a cat", "a photo of a car"]
 
 # 推理
 inputs = processor(text=texts, images=image, return_tensors="pt")
