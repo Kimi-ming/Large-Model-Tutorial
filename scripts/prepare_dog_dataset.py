@@ -2,264 +2,363 @@
 """
 Stanford Dogs Dataset 准备脚本
 
-用于下载和准备犬种分类数据集的子集，用于LoRA微调示例。
+自动下载并准备犬种分类数据集，用于LoRA微调示例。
 """
 
 import os
 import argparse
 import shutil
+import tarfile
+import random
 from pathlib import Path
 from typing import List
 import urllib.request
-import tarfile
-import random
-from PIL import Image
+from tqdm import tqdm
 
-# 为了演示，我们使用一个简化的方法
-# 实际的Stanford Dogs数据集需要从官方源下载
 
-def create_demo_dataset(output_dir: str, num_classes: int = 10, samples_per_class: int = 100):
+class DownloadProgressBar(tqdm):
+    """下载进度条"""
+    def update_to(self, b=1, bsize=1, tsize=None):
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)
+
+
+def download_file(url: str, output_path: str):
     """
-    创建演示数据集（使用占位符图像）
+    下载文件并显示进度条
     
-    注意：这是一个演示脚本。实际使用时，您需要：
-    1. 从官方源下载真实的Stanford Dogs数据集
-    2. 或使用您自己的图像数据集
+    Args:
+        url: 下载URL
+        output_path: 输出路径
+    """
+    with DownloadProgressBar(unit='B', unit_scale=True, miniters=1, desc=output_path) as t:
+        urllib.request.urlretrieve(url, filename=output_path, reporthook=t.update_to)
+
+
+def download_and_prepare_dataset(
+    output_dir: str,
+    num_classes: int = 10,
+    train_ratio: float = 0.8,
+    download: bool = True
+):
+    """
+    下载并准备Stanford Dogs数据集
     
     Args:
         output_dir: 输出目录
-        num_classes: 类别数量
-        samples_per_class: 每个类别的样本数
+        num_classes: 使用的类别数量（1-120）
+        train_ratio: 训练集比例
+        download: 是否下载数据集（如果已存在则跳过）
     """
-    print("=" * 60)
+    print("=" * 70)
     print("Stanford Dogs Dataset 准备工具")
-    print("=" * 60)
+    print("=" * 70)
     
-    # 定义犬种类别（前10个常见品种）
-    dog_breeds = [
-        "golden_retriever",
-        "labrador_retriever",
-        "german_shepherd",
-        "beagle",
-        "bulldog",
-        "poodle",
-        "rottweiler",
-        "yorkshire_terrier",
-        "boxer",
-        "dachshund"
-    ][:num_classes]
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"\n📦 准备创建数据集:")
-    print(f"   - 类别数: {num_classes}")
-    print(f"   - 每类样本数: {samples_per_class}")
-    print(f"   - 输出目录: {output_dir}")
+    # Stanford Dogs 数据集URL
+    dataset_url = "http://vision.stanford.edu/aditya86/ImageNetDogs/images.tar"
+    annotations_url = "http://vision.stanford.edu/aditya86/ImageNetDogs/annotation.tar"
+    lists_url = "http://vision.stanford.edu/aditya86/ImageNetDogs/lists.tar"
     
-    # 创建目录结构
-    output_path = Path(output_dir)
-    for split in ['train', 'val', 'test']:
-        for breed in dog_breeds:
-            breed_dir = output_path / split / breed
-            breed_dir.mkdir(parents=True, exist_ok=True)
+    # 下载路径
+    download_dir = output_dir / "downloads"
+    download_dir.mkdir(exist_ok=True)
     
-    print("\n✅ 目录结构创建完成")
+    images_tar = download_dir / "images.tar"
+    annotations_tar = download_dir / "annotation.tar"
+    lists_tar = download_dir / "lists.tar"
     
-    # 数据集分割比例
-    train_ratio = 0.7
-    val_ratio = 0.15
-    test_ratio = 0.15
+    # 解压路径
+    extract_dir = output_dir / "raw"
+    extract_dir.mkdir(exist_ok=True)
     
-    train_samples = int(samples_per_class * train_ratio)
-    val_samples = int(samples_per_class * val_ratio)
-    test_samples = samples_per_class - train_samples - val_samples
+    # 1. 下载数据集
+    if download:
+        print("\n📥 步骤 1/4: 下载数据集")
+        print("-" * 70)
+        
+        if not images_tar.exists():
+            print(f"正在下载图像数据集 (~750MB)...")
+            try:
+                download_file(dataset_url, str(images_tar))
+                print("✅ 图像数据集下载完成")
+            except Exception as e:
+                print(f"❌ 下载失败: {e}")
+                print("\n💡 备选方案:")
+                print("   1. 手动下载: http://vision.stanford.edu/aditya86/ImageNetDogs/")
+                print(f"   2. 将 images.tar 放到: {download_dir}")
+                print("   3. 重新运行此脚本，使用 --no-download 参数")
+                return False
+        else:
+            print("✅ 图像数据集已存在，跳过下载")
+        
+        if not lists_tar.exists():
+            print(f"\n正在下载数据集列表...")
+            try:
+                download_file(lists_url, str(lists_tar))
+                print("✅ 数据集列表下载完成")
+            except Exception as e:
+                print(f"⚠️  列表下载失败: {e}，将使用默认分割")
+        else:
+            print("✅ 数据集列表已存在，跳过下载")
     
-    print(f"\n📊 数据分割:")
-    print(f"   - 训练集: {train_samples * num_classes} 张 ({train_samples}/类)")
-    print(f"   - 验证集: {val_samples * num_classes} 张 ({val_samples}/类)")
-    print(f"   - 测试集: {test_samples * num_classes} 张 ({test_samples}/类)")
+    # 2. 解压数据集
+    print("\n📦 步骤 2/4: 解压数据集")
+    print("-" * 70)
     
-    print("\n" + "=" * 60)
-    print("⚠️  重要提示")
-    print("=" * 60)
-    print("此脚本创建了目录结构，但您需要手动添加图像文件。")
-    print("\n推荐的数据获取方式：")
-    print("\n1. 使用真实的Stanford Dogs数据集:")
-    print("   - 下载地址: http://vision.stanford.edu/aditya86/ImageNetDogs/")
-    print("   - 解压后按照创建的目录结构组织图像")
-    print("\n2. 使用您自己的犬种图像:")
-    print("   - 将图像按品种分类放入对应目录")
-    print("   - 确保图像格式为 JPG/PNG")
-    print("   - 建议图像尺寸: 224x224 或更大")
-    print("\n3. 使用在线图像（用于快速测试）:")
-    print("   - 从 Unsplash/Pexels 等网站下载免费图像")
-    print("   - 搜索对应的犬种名称")
-    print("   - 手动下载并放入对应目录")
+    images_dir = extract_dir / "Images"
+    if not images_dir.exists():
+        print("正在解压图像数据集...")
+        try:
+            with tarfile.open(images_tar, 'r') as tar:
+                tar.extractall(extract_dir)
+            print("✅ 解压完成")
+        except Exception as e:
+            print(f"❌ 解压失败: {e}")
+            return False
+    else:
+        print("✅ 数据集已解压，跳过")
     
-    # 创建一个README文件
-    readme_path = output_path / "README.md"
-    with open(readme_path, 'w', encoding='utf-8') as f:
-        f.write("# 犬种分类数据集\n\n")
-        f.write("## 数据集结构\n\n")
-        f.write("```\n")
-        f.write(f"{output_dir}/\n")
-        f.write("├── train/          # 训练集\n")
-        f.write("├── val/            # 验证集\n")
-        f.write("└── test/           # 测试集\n")
-        f.write("```\n\n")
-        f.write("## 类别列表\n\n")
-        for i, breed in enumerate(dog_breeds, 1):
-            f.write(f"{i}. {breed}\n")
-        f.write("\n## 数据来源\n\n")
-        f.write("请从以下来源获取图像数据：\n\n")
-        f.write("1. **Stanford Dogs Dataset** (推荐)\n")
-        f.write("   - URL: http://vision.stanford.edu/aditya86/ImageNetDogs/\n")
-        f.write("   - 包含120个犬种，共20,580张图像\n\n")
-        f.write("2. **自定义数据集**\n")
-        f.write("   - 收集您自己的犬种图像\n")
-        f.write("   - 确保每个类别有足够的样本（建议>50张）\n\n")
-        f.write("## 图像要求\n\n")
-        f.write("- 格式: JPG, PNG\n")
-        f.write("- 尺寸: 建议 224x224 或更大\n")
-        f.write("- 质量: 清晰，光照良好\n")
-        f.write("- 内容: 主体为犬只，背景简洁\n")
+    # 3. 组织数据集
+    print("\n📂 步骤 3/4: 组织数据集")
+    print("-" * 70)
     
-    print(f"\n📝 已创建说明文件: {readme_path}")
+    # 获取所有犬种类别
+    all_breeds = sorted([d.name for d in images_dir.iterdir() if d.is_dir()])
     
-    # 创建一个示例的类别映射文件
-    classes_file = output_path / "classes.txt"
-    with open(classes_file, 'w', encoding='utf-8') as f:
-        for breed in dog_breeds:
-            f.write(f"{breed}\n")
+    if num_classes > len(all_breeds):
+        print(f"⚠️  请求的类别数 ({num_classes}) 超过可用类别数 ({len(all_breeds)})")
+        num_classes = len(all_breeds)
     
-    print(f"📝 已创建类别文件: {classes_file}")
+    # 选择指定数量的类别
+    selected_breeds = all_breeds[:num_classes]
     
-    print("\n" + "=" * 60)
+    print(f"📊 数据集信息:")
+    print(f"   总类别数: {len(all_breeds)}")
+    print(f"   使用类别数: {num_classes}")
+    print(f"   训练/测试比例: {train_ratio:.0%} / {1-train_ratio:.0%}")
+    
+    # 创建训练和测试目录
+    train_dir = output_dir / "train"
+    test_dir = output_dir / "test"
+    train_dir.mkdir(exist_ok=True)
+    test_dir.mkdir(exist_ok=True)
+    
+    # 处理每个类别
+    print(f"\n正在处理 {num_classes} 个犬种类别...")
+    
+    total_train = 0
+    total_test = 0
+    
+    for breed in tqdm(selected_breeds, desc="处理类别"):
+        breed_dir = images_dir / breed
+        
+        # 获取该类别的所有图像
+        image_files = list(breed_dir.glob("*.jpg"))
+        
+        if not image_files:
+            print(f"⚠️  {breed} 没有找到图像，跳过")
+            continue
+        
+        # 随机打乱
+        random.shuffle(image_files)
+        
+        # 分割训练和测试
+        split_idx = int(len(image_files) * train_ratio)
+        train_files = image_files[:split_idx]
+        test_files = image_files[split_idx:]
+        
+        # 创建类别目录
+        train_breed_dir = train_dir / breed
+        test_breed_dir = test_dir / breed
+        train_breed_dir.mkdir(exist_ok=True)
+        test_breed_dir.mkdir(exist_ok=True)
+        
+        # 复制训练集图像
+        for img_file in train_files:
+            shutil.copy2(img_file, train_breed_dir / img_file.name)
+        
+        # 复制测试集图像
+        for img_file in test_files:
+            shutil.copy2(img_file, test_breed_dir / img_file.name)
+        
+        total_train += len(train_files)
+        total_test += len(test_files)
+    
+    # 4. 验证数据集
+    print("\n✅ 步骤 4/4: 验证数据集")
+    print("-" * 70)
+    
+    print(f"📊 最终统计:")
+    print(f"   训练样本: {total_train}")
+    print(f"   测试样本: {total_test}")
+    print(f"   总样本数: {total_train + total_test}")
+    print(f"\n📁 数据集位置:")
+    print(f"   训练集: {train_dir}")
+    print(f"   测试集: {test_dir}")
+    
+    # 显示类别列表
+    print(f"\n🐕 犬种类别:")
+    for i, breed in enumerate(selected_breeds, 1):
+        breed_name = breed.split('-', 1)[-1].replace('_', ' ').title()
+        train_count = len(list((train_dir / breed).glob("*.jpg")))
+        test_count = len(list((test_dir / breed).glob("*.jpg")))
+        print(f"   {i:2d}. {breed_name:30s} (训练: {train_count:3d}, 测试: {test_count:3d})")
+    
+    print("\n" + "=" * 70)
     print("✅ 数据集准备完成！")
-    print("=" * 60)
-    print(f"\n下一步: 将图像文件放入 {output_dir} 的对应目录中")
-    print("然后运行训练脚本: python code/02-fine-tuning/lora/train.py")
-
-
-def download_sample_images(output_dir: str, num_samples: int = 5):
-    """
-    下载一些示例图像用于快速测试（可选功能）
+    print("=" * 70)
+    print("\n📝 下一步:")
+    print("   1. 查看数据集: ls", train_dir)
+    print("   2. 开始训练: python code/02-fine-tuning/lora/train.py")
+    print("   3. 或使用Notebook: jupyter notebook notebooks/01_lora_finetuning_tutorial.ipynb")
     
-    注意：这需要网络连接，且仅用于演示
-    """
-    print("\n🌐 正在下载示例图像...")
-    print("（此功能需要实现具体的下载逻辑）")
-    # 实际实现需要从Unsplash API或其他来源下载
-    pass
+    return True
 
 
-def validate_dataset(data_dir: str) -> bool:
+def validate_dataset(data_dir: str):
     """
-    验证数据集是否正确准备
+    验证数据集是否准备正确
     
     Args:
         data_dir: 数据集目录
-        
-    Returns:
-        bool: 数据集是否有效
     """
-    data_path = Path(data_dir)
-    
-    if not data_path.exists():
-        print(f"❌ 数据集目录不存在: {data_dir}")
-        return False
+    data_dir = Path(data_dir)
     
     print("\n🔍 验证数据集...")
+    print("-" * 70)
     
-    splits = ['train', 'val', 'test']
-    total_images = 0
+    train_dir = data_dir / "train"
+    test_dir = data_dir / "test"
     
-    for split in splits:
-        split_dir = data_path / split
-        if not split_dir.exists():
-            print(f"❌ 缺少 {split} 目录")
-            return False
-        
-        classes = [d for d in split_dir.iterdir() if d.is_dir()]
-        if len(classes) == 0:
-            print(f"⚠️  {split} 目录为空")
-            continue
-        
-        split_images = 0
-        for class_dir in classes:
-            images = list(class_dir.glob('*.jpg')) + list(class_dir.glob('*.png'))
-            split_images += len(images)
-        
-        total_images += split_images
-        print(f"   {split}: {len(classes)} 类, {split_images} 张图像")
-    
-    if total_images == 0:
-        print("\n⚠️  警告: 数据集目录结构已创建，但尚未添加图像")
-        print("   请按照 README.md 的说明添加图像文件")
+    if not train_dir.exists():
+        print(f"❌ 训练集目录不存在: {train_dir}")
         return False
     
-    print(f"\n✅ 数据集验证通过！共 {total_images} 张图像")
+    if not test_dir.exists():
+        print(f"❌ 测试集目录不存在: {test_dir}")
+        return False
+    
+    train_classes = sorted([d.name for d in train_dir.iterdir() if d.is_dir()])
+    test_classes = sorted([d.name for d in test_dir.iterdir() if d.is_dir()])
+    
+    if not train_classes:
+        print(f"❌ 训练集为空")
+        return False
+    
+    if train_classes != test_classes:
+        print(f"⚠️  训练集和测试集的类别不一致")
+    
+    print(f"✅ 验证通过")
+    print(f"   类别数: {len(train_classes)}")
+    
+    total_train = sum(len(list((train_dir / c).glob("*.jpg"))) for c in train_classes)
+    total_test = sum(len(list((test_dir / c).glob("*.jpg"))) for c in test_classes)
+    
+    print(f"   训练样本: {total_train}")
+    print(f"   测试样本: {total_test}")
+    
     return True
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="准备犬种分类数据集",
+        description="Stanford Dogs Dataset 准备工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例用法:
-  # 创建10个类别的数据集结构
+示例:
+  # 下载并准备10个类别的数据集
   python scripts/prepare_dog_dataset.py --output_dir data/dogs --num_classes 10
   
-  # 验证已有数据集
-  python scripts/prepare_dog_dataset.py --output_dir data/dogs --validate
+  # 使用已下载的数据集（跳过下载）
+  python scripts/prepare_dog_dataset.py --output_dir data/dogs --no-download
   
-注意:
-  此脚本创建数据集目录结构，您需要手动添加图像文件。
-  详见生成的 README.md 文件。
+  # 验证数据集
+  python scripts/prepare_dog_dataset.py --output_dir data/dogs --validate
         """
     )
     
     parser.add_argument(
-        '--output_dir',
+        "--output_dir",
         type=str,
-        default='data/dogs',
-        help='输出目录路径（默认: data/dogs）'
+        default="data/dogs",
+        help="输出目录 (默认: data/dogs)"
     )
     
     parser.add_argument(
-        '--num_classes',
+        "--num_classes",
         type=int,
         default=10,
-        help='类别数量（默认: 10）'
+        help="使用的类别数量 (默认: 10, 最大: 120)"
     )
     
     parser.add_argument(
-        '--samples_per_class',
+        "--train_ratio",
+        type=float,
+        default=0.8,
+        help="训练集比例 (默认: 0.8)"
+    )
+    
+    parser.add_argument(
+        "--no-download",
+        action="store_true",
+        help="跳过下载，使用已存在的数据集"
+    )
+    
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="验证数据集是否准备正确"
+    )
+    
+    parser.add_argument(
+        "--seed",
         type=int,
-        default=100,
-        help='每个类别的目标样本数（默认: 100）'
-    )
-    
-    parser.add_argument(
-        '--validate',
-        action='store_true',
-        help='验证现有数据集'
+        default=42,
+        help="随机种子 (默认: 42)"
     )
     
     args = parser.parse_args()
     
+    # 设置随机种子
+    random.seed(args.seed)
+    
+    # 验证模式
     if args.validate:
         validate_dataset(args.output_dir)
-    else:
-        create_demo_dataset(
-            args.output_dir,
-            args.num_classes,
-            args.samples_per_class
-        )
-        
-        # 验证创建的结构
-        validate_dataset(args.output_dir)
+        return
+    
+    # 准备数据集
+    success = download_and_prepare_dataset(
+        output_dir=args.output_dir,
+        num_classes=args.num_classes,
+        train_ratio=args.train_ratio,
+        download=not args.no_download
+    )
+    
+    if not success:
+        print("\n❌ 数据集准备失败")
+        print("\n💡 如果自动下载失败，您可以:")
+        print("   1. 手动下载数据集:")
+        print("      - 访问: http://vision.stanford.edu/aditya86/ImageNetDogs/")
+        print("      - 下载 images.tar")
+        print(f"      - 放到: {args.output_dir}/downloads/")
+        print("   2. 使用自己的数据集:")
+        print("      - 按以下结构组织:")
+        print("        data/dogs/")
+        print("          ├── train/")
+        print("          │   ├── breed1/")
+        print("          │   │   ├── img1.jpg")
+        print("          │   │   └── ...")
+        print("          │   └── breed2/")
+        print("          └── test/")
+        print("              ├── breed1/")
+        print("              └── breed2/")
+        exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

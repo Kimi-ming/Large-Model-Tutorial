@@ -90,7 +90,23 @@ jupyter lab
 
 ```bash
 # 下载Stanford Dogs数据集（10个犬种）
+# 注意：会自动下载约750MB的数据集，需要5-10分钟
 python scripts/prepare_dog_dataset.py --output_dir data/dogs --num_classes 10
+```
+
+**脚本功能**：
+- ✅ 自动从官方源下载数据集（~750MB）
+- ✅ 解压并组织成训练/测试集
+- ✅ 验证数据完整性
+
+**如果下载失败**：
+```bash
+# 手动下载方案
+# 1. 访问 http://vision.stanford.edu/aditya86/ImageNetDogs/
+# 2. 下载 images.tar
+# 3. 放到 data/dogs/downloads/
+# 4. 运行（跳过下载）
+python scripts/prepare_dog_dataset.py --output_dir data/dogs --num_classes 10 --no-download
 ```
 
 ### 手动准备
