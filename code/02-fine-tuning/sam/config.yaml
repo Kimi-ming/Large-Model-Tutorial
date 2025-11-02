@@ -1,0 +1,116 @@
+# SAM微调配置文件
+
+# 模型配置
+model:
+  type: "vit_b"  # vit_b, vit_l, vit_h
+  checkpoint: "models/sam/sam_vit_b_01ec64.pth"  # 预训练权重路径
+  freeze_image_encoder: true  # 是否冻结图像编码器
+  freeze_prompt_encoder: false  # 是否冻结提示编码器
+  freeze_mask_decoder: false   # 是否冻结掩码解码器
+
+# 数据配置
+data:
+  data_dir: "data/segmentation"  # 数据目录
+  dataset_type: "directory"      # directory 或 coco
+  train_split: "train"
+  val_split: "val"
+  image_size: 1024              # SAM标准输入大小
+  prompt_mode: "box"            # box, point, both
+  num_points: 3                 # 点提示数量（如果使用point模式）
+  batch_size: 2                 # Batch大小（SAM显存要求高）
+  num_workers: 4                # 数据加载线程数
+  augment: true                 # 是否使用数据增强
+
+# 微调策略
+finetuning:
+  strategy: "adapter"  # full, adapter, lora
+  
+  # Adapter配置（如果strategy=adapter）
+  adapter:
+    hidden_dim: 256
+    adapter_layers: [6, 12, 18, 24]  # 在哪些层添加adapter
+  
+  # LoRA配置（如果strategy=lora）
+  lora:
+    r: 8
+    lora_alpha: 32
+    target_modules:
+      - "qkv"
+      - "proj"
+    lora_dropout: 0.1
+
+# 训练配置
+training:
+  num_epochs: 50
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_epochs: 2
+  gradient_accumulation_steps: 4  # 累积梯度以模拟更大batch
+  max_grad_norm: 1.0             # 梯度裁剪
+  
+  # 学习率调度
+  lr_scheduler:
+    type: "cosine"  # cosine, linear, step
+    min_lr: 1.0e-6
+  
+  # 优化器
+  optimizer:
+    type: "adamw"  # adamw, sgd
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+
+# 损失函数配置
+loss:
+  # 分割损失
+  segmentation_loss:
+    type: "dice_bce"  # dice, bce, dice_bce, focal
+    dice_weight: 1.0
+    bce_weight: 1.0
+  
+  # IoU预测损失
+  iou_loss:
+    weight: 1.0
+
+# 评估配置
+evaluation:
+  eval_every_n_epochs: 2  # 每N个epoch评估一次
+  metrics:
+    - "iou"
+    - "dice"
+    - "pixel_accuracy"
+  save_visualizations: true
+  num_vis_samples: 10
+
+# 输出配置
+output:
+  output_dir: "outputs/sam_finetuning"
+  experiment_name: "sam_vit_b_adapter"
+  save_total_limit: 3           # 只保留最好的3个检查点
+  save_best_only: true          # 只保存最优模型
+  logging_steps: 50             # 每N步记录日志
+  
+  # TensorBoard
+  use_tensorboard: true
+  tensorboard_dir: "runs"
+
+# 硬件配置
+device:
+  use_cuda: true
+  cuda_device: "0"  # GPU设备ID，多卡用"0,1,2,3"
+  use_amp: true     # 使用混合精度训练（推荐）
+  
+# 随机种子
+seed: 42
+
+# 恢复训练
+resume:
+  enabled: false
+  checkpoint_path: null  # 恢复的检查点路径
+  resume_optimizer: true # 是否恢复优化器状态
+
+# 调试模式
+debug:
+  enabled: false
+  fast_run: false  # 快速运行（只用少量数据测试）
+  num_samples: 100 # fast_run时使用的样本数
+
