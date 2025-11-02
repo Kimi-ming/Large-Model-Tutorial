@@ -24,7 +24,8 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # 复用LoRA的数据集类
-sys.path.insert(0, str(project_root / "code" / "02-fine-tuning" / "lora"))
+lora_dir = project_root / "code" / "02-fine-tuning" / "lora"
+sys.path.insert(0, str(lora_dir))
 from dataset import create_dataloaders
 
 

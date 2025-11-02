@@ -20,11 +20,13 @@ from transformers import CLIPModel, CLIPProcessor
 from peft import LoraConfig, get_peft_model, PeftModel
 from tqdm import tqdm
 
-# 添加项目根目录到路径
+# 添加项目根目录和当前目录到路径
 project_root = Path(__file__).parent.parent.parent.parent
+current_dir = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(current_dir))
 
-from code.utils.model_loader import ModelLoader
+# 导入当前目录的dataset模块
 from dataset import DogBreedDataset, create_dataloaders
 
 

@@ -285,7 +285,7 @@ check_gpu() {
 ###############################################################################
 
 detect_network_region() {
-    """检测网络区域（是否在国内）"""
+    # 检测网络区域（是否在国内）
     if curl -s --connect-timeout 3 http://www.google.com > /dev/null 2>&1; then
         return 1  # 国外
     else

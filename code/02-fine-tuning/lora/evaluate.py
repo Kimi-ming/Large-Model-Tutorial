@@ -22,10 +22,13 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# 添加项目根目录到路径
+# 添加项目根目录和当前目录到路径
 project_root = Path(__file__).parent.parent.parent.parent
+current_dir = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(current_dir))
 
+# 导入当前目录的模块
 from train import CLIPClassifier, load_config
 from dataset import DogBreedDataset
 

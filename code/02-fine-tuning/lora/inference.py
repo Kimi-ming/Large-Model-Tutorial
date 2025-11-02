@@ -17,10 +17,13 @@ from PIL import Image
 from transformers import CLIPProcessor
 import numpy as np
 
-# 添加项目根目录到路径
+# 添加项目根目录和当前目录到路径
 project_root = Path(__file__).parent.parent.parent.parent
+current_dir = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(current_dir))
 
+# 导入当前目录的模块
 from train import CLIPClassifier
 from evaluate import load_model
 
