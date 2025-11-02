@@ -18,9 +18,11 @@
 ## 功能特性
 
 ### ✅ 支持的微调策略
-- **Full Fine-tuning**: 微调所有参数
-- **Adapter Tuning**: 添加adapter层（参数高效）
-- **LoRA**: 低秩适应（参数高效）
+- **Full Fine-tuning**: 微调所有参数 ✅ 完整实现
+- **Simplified Adapter**: 冻结image_encoder，仅训练decoder ⚠️ 简化实现
+- **Simplified LoRA**: 冻结image_encoder，仅训练decoder ⚠️ 简化实现
+
+> **⚠️ 重要说明**：当前Adapter和LoRA为简化实现，并未真正插入Adapter模块或使用PEFT库配置LoRA权重。完整实现计划在P2阶段补充。详见[微调策略说明](#微调策略)。
 
 ### ✅ 支持的数据格式
 - **目录格式**: `images/` 和 `masks/` 分别存放图像和掩码
@@ -254,28 +256,85 @@ data:
 
 ```yaml
 finetuning:
-  strategy: "adapter"  # full, adapter, lora
-  
-  # Adapter配置
-  adapter:
-    hidden_dim: 256
-    adapter_layers: [6, 12, 18, 24]
-  
-  # LoRA配置
-  lora:
-    r: 8
-    lora_alpha: 32
-    target_modules: ["qkv", "proj"]
-    lora_dropout: 0.1
+  strategy: "full"  # full, adapter, lora
+```
+
+**⚠️ 当前实现说明**：
+
+#### 1. Full Fine-tuning（完整实现）✅
+```yaml
+strategy: "full"
+```
+- 训练mask_decoder和prompt_encoder
+- 可选择冻结image_encoder（推荐）
+- 完全符合预期的全参数微调
+
+#### 2. Simplified Adapter（简化实现）⚠️
+```yaml
+strategy: "adapter"
+```
+**当前行为**：
+- 冻结image_encoder
+- 训练mask_decoder和prompt_encoder
+- **未实现真正的Adapter模块插入**
+
+**与标准Adapter的区别**：
+- ❌ 未在Transformer层插入adapter模块
+- ❌ 配置文件中的`adapter`参数不生效
+- ✅ 仅是一种参数冻结策略
+
+**完整Adapter实现需要**：
+```python
+# 在每个Transformer block中插入
+class AdapterLayer(nn.Module):
+    def __init__(self, hidden_dim, adapter_dim):
+        self.down = nn.Linear(hidden_dim, adapter_dim)
+        self.up = nn.Linear(adapter_dim, hidden_dim)
+        self.activation = nn.ReLU()
+    
+    def forward(self, x):
+        return x + self.up(self.activation(self.down(x)))
+```
+
+#### 3. Simplified LoRA（简化实现）⚠️
+```yaml
+strategy: "lora"
+```
+**当前行为**：
+- 冻结image_encoder
+- 训练mask_decoder和prompt_encoder
+- **未使用PEFT库配置LoRA权重**
+
+**与标准LoRA的区别**：
+- ❌ 未调用`peft.get_peft_model()`
+- ❌ 未对attention层添加低秩分解
+- ❌ 配置文件中的`lora`参数不生效
+- ✅ 仅是一种参数冻结策略
+
+**完整LoRA实现需要**：
+```python
+from peft import LoraConfig, get_peft_model
+
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=32,
+    target_modules=["qkv", "proj"],  # 针对ViT的attention层
+    lora_dropout=0.1
+)
+model = get_peft_model(model, lora_config)
 ```
 
 **策略对比**：
 
-| 策略 | 可训练参数 | 显存需求 | 训练速度 | 效果 |
-|------|-----------|---------|---------|------|
-| Full | 100% | 高 | 慢 | 最佳 |
-| Adapter | ~5% | 中 | 中 | 良好 |
-| LoRA | ~1% | 低 | 快 | 良好 |
+| 策略 | 可训练参数 | 显存需求 | 训练速度 | 实现状态 |
+|------|-----------|---------|---------|---------|
+| Full | mask_decoder + prompt_encoder | 中 | 快 | ✅ 完整 |
+| Adapter (简化) | 同Full | 中 | 快 | ⚠️ 简化 |
+| LoRA (简化) | 同Full | 中 | 快 | ⚠️ 简化 |
+
+> **推荐使用**：当前版本推荐使用`strategy: "full"`进行微调，效果稳定可靠。如需真正的Adapter/LoRA，请参考：
+> - Adapter: https://github.com/google-research/adapter-bert
+> - LoRA: https://github.com/huggingface/peft
 
 ### 训练配置
 

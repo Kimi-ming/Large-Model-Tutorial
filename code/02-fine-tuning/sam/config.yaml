@@ -23,21 +23,24 @@ data:
 
 # 微调策略
 finetuning:
-  strategy: "adapter"  # full, adapter, lora
+  strategy: "full"  # full, adapter, lora
   
-  # Adapter配置（如果strategy=adapter）
-  adapter:
-    hidden_dim: 256
-    adapter_layers: [6, 12, 18, 24]  # 在哪些层添加adapter
+  # ⚠️ 注意：当前adapter和lora为简化实现，仅冻结部分参数
+  # 下面的配置在当前版本中不生效，完整实现计划在P2阶段补充
   
-  # LoRA配置（如果strategy=lora）
-  lora:
-    r: 8
-    lora_alpha: 32
-    target_modules:
-      - "qkv"
-      - "proj"
-    lora_dropout: 0.1
+  # Adapter配置（当前不生效）
+  # adapter:
+  #   hidden_dim: 256
+  #   adapter_layers: [6, 12, 18, 24]
+  
+  # LoRA配置（当前不生效）
+  # lora:
+  #   r: 8
+  #   lora_alpha: 32
+  #   target_modules:
+  #     - "qkv"
+  #     - "proj"
+  #   lora_dropout: 0.1
 
 # 训练配置
 training:
