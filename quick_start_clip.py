@@ -26,23 +26,60 @@ except ImportError as e:
 
 
 def download_sample_image():
-    """下载示例图像"""
-    print("📥 下载示例图像...")
+    """下载示例图像（带多个备用URL）"""
+    print("📥 准备示例图像...")
     
-    # 使用一张公开的示例图像
-    image_url = "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400"
+    # 多个备用图像URL（从简单到复杂）
+    image_urls = [
+        # 备用1: 纯色图像（data URI，永不失效）
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        # 备用2: 公开图像URL
+        "https://picsum.photos/400/300",
+        # 备用3: Unsplash
+        "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400",
+    ]
     
+    # 尝试从URL下载
+    for idx, url in enumerate(image_urls[1:], 1):  # 跳过data URI，作为最后备用
+        try:
+            print(f"尝试下载... (方案 {idx})")
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            image = Image.open(BytesIO(response.content))
+            # 确保图像是RGB模式
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            print(f"✅ 图像下载成功 (来源: 方案 {idx})")
+            return image
+        except Exception as e:
+            print(f"⚠️  方案 {idx} 失败: {e}")
+            continue
+    
+    # 所有URL都失败，创建本地演示图像
+    print("💡 使用本地生成的演示图像...")
     try:
-        response = requests.get(image_url, timeout=10)
-        response.raise_for_status()
-        image = Image.open(BytesIO(response.content))
-        print("✅ 图像下载成功")
+        # 创建一个简单的渐变图像
+        import numpy as np
+        width, height = 400, 300
+        img_array = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        # 创建渐变效果
+        for i in range(height):
+            for j in range(width):
+                img_array[i, j] = [
+                    int(255 * i / height),  # Red gradient
+                    int(255 * j / width),   # Green gradient
+                    128                      # Constant blue
+                ]
+        
+        image = Image.fromarray(img_array, 'RGB')
+        print("✅ 使用本地生成的演示图像")
         return image
     except Exception as e:
-        print(f"⚠️  下载失败: {e}")
-        print("💡 将创建一个演示图像...")
-        # 创建一个简单的演示图像
-        image = Image.new('RGB', (224, 224), color=(73, 109, 137))
+        # 最后的最后，创建纯色图像
+        print(f"⚠️  生成失败: {e}")
+        print("💡 使用纯色图像...")
+        image = Image.new('RGB', (400, 300), color=(73, 109, 137))
         return image
 
 

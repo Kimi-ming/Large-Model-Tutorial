@@ -4,7 +4,7 @@ CLIP推理API服务
 基于FastAPI的CLIP模型推理服务
 """
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
@@ -13,6 +13,21 @@ from transformers import CLIPModel, CLIPProcessor
 import io
 from typing import List, Dict, Union
 import time
+import os
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+# 尝试导入slowapi（可选依赖）
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    SLOWAPI_AVAILABLE = True
+except ImportError:
+    print("⚠️  slowapi未安装，限流功能不可用")
+    print("   安装方法: pip install slowapi")
+    SLOWAPI_AVAILABLE = False
+    Limiter = None
 
 
 class CLIPInferenceService:
@@ -213,12 +228,33 @@ class CLIPInferenceService:
         
         return features.cpu()
 
+# 配置
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/jpg", "image/webp"}
+
+# 创建限流器（如果可用）
+if SLOWAPI_AVAILABLE:
+    limiter = Limiter(key_func=get_remote_address)
+else:
+    # 如果slowapi不可用，使用空装饰器
+    class DummyLimiter:
+        def limit(self, *args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+    limiter = DummyLimiter()
+
 # 创建FastAPI应用
 app = FastAPI(
     title="CLIP推理服务",
     description="基于CLIP的图文匹配推理API",
     version="1.0.0"
 )
+
+# 注册限流异常处理器（如果可用）
+if SLOWAPI_AVAILABLE:
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # 添加CORS中间件
 app.add_middleware(
@@ -231,6 +267,41 @@ app.add_middleware(
 
 # 全局模型实例
 model_service = None
+
+
+def validate_image_file(file: UploadFile) -> None:
+    """
+    验证上传的图像文件
+    
+    Args:
+        file: 上传的文件
+        
+    Raises:
+        HTTPException: 文件验证失败
+    """
+    # 检查文件类型
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型: {file.content_type}. 支持的类型: {', '.join(ALLOWED_IMAGE_TYPES)}"
+        )
+    
+    # 检查文件大小
+    file.file.seek(0, 2)  # 移动到文件末尾
+    file_size = file.file.tell()
+    file.file.seek(0)  # 重置到文件开头
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件过大: {file_size / 1024 / 1024:.2f}MB. 最大允许: {MAX_FILE_SIZE / 1024 / 1024}MB"
+        )
+    
+    if file_size == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="文件为空"
+        )
 
 
 @app.on_event("startup")
@@ -288,12 +359,18 @@ async def health_check():
 
 
 @app.post("/predict")
+@limiter.limit("30/minute")  # 限制每分钟30次请求
 async def predict(
+    request: Request,
     image: UploadFile = File(..., description="上传的图像文件"),
     texts: str = Form(..., description="逗号分隔的候选文本")
 ):
     """
     图文匹配推理
+    
+    限流: 30次/分钟
+    文件大小限制: 10MB
+    支持格式: JPEG, PNG, WEBP
     
     Args:
         image: 上传的图像文件
@@ -304,6 +381,9 @@ async def predict(
     """
     if model_service is None:
         raise HTTPException(status_code=503, detail="模型未加载")
+    
+    # 验证文件
+    validate_image_file(image)
     
     try:
         # 解析文本
@@ -338,12 +418,17 @@ async def predict(
 
 
 @app.post("/image_features")
+@limiter.limit("20/minute")  # 限制每分钟20次请求
 async def extract_image_features(
+    request: Request,
     image: UploadFile = File(..., description="上传的图像文件"),
     normalize: bool = Form(True, description="是否归一化特征")
 ):
     """
     提取图像特征
+    
+    限流: 20次/分钟
+    文件大小限制: 10MB
     
     Args:
         image: 上传的图像文件
@@ -354,6 +439,9 @@ async def extract_image_features(
     """
     if model_service is None:
         raise HTTPException(status_code=503, detail="模型未加载")
+    
+    # 验证文件
+    validate_image_file(image)
     
     try:
         # 读取图像
@@ -386,12 +474,16 @@ async def extract_image_features(
 
 
 @app.post("/text_features")
+@limiter.limit("50/minute")  # 限制每分钟50次请求（文本特征提取较快）
 async def extract_text_features(
+    request: Request,
     texts: str = Form(..., description="逗号分隔的文本列表"),
     normalize: bool = Form(True, description="是否归一化特征")
 ):
     """
     提取文本特征
+    
+    限流: 50次/分钟
     
     Args:
         texts: 逗号分隔的文本列表

@@ -31,6 +31,8 @@ onnxruntime==1.16.3
 fastapi==0.104.1
 uvicorn==0.24.0
 pydantic==2.5.0
+python-multipart==0.0.6  # FastAPI文件上传
+# slowapi==0.1.9  # API限流（可选，取消注释以启用）
 
 # 配置和日志
 pyyaml==6.0.1
