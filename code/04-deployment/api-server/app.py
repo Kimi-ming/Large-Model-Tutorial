@@ -11,14 +11,207 @@ from PIL import Image
 import torch
 from transformers import CLIPModel, CLIPProcessor
 import io
-import sys
-from pathlib import Path
+from typing import List, Dict, Union
+import time
 
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
 
-from code.deployment.nvidia.basic.pytorch_inference import CLIPInferenceService
+class CLIPInferenceService:
+    """
+    CLIP推理服务（内嵌版本）
+    
+    支持图文匹配、图像特征提取、文本特征提取
+    """
+    
+    def __init__(
+        self,
+        model_path: str,
+        device: str = "cuda",
+        use_fp16: bool = False
+    ):
+        """
+        初始化推理服务
+        
+        Args:
+            model_path: 模型路径或HuggingFace模型名称
+            device: 计算设备 ("cuda", "cpu", "mps")
+            use_fp16: 是否使用FP16混合精度
+        """
+        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
+        self.use_fp16 = use_fp16 and torch.cuda.is_available()
+        
+        print(f"🚀 初始化CLIP推理服务...")
+        print(f"   设备: {self.device}")
+        print(f"   FP16: {self.use_fp16}")
+        
+        # 加载模型和处理器
+        self.model = CLIPModel.from_pretrained(model_path)
+        self.processor = CLIPProcessor.from_pretrained(model_path)
+        
+        # 移动到设备
+        self.model = self.model.to(self.device)
+        
+        # 转换为FP16
+        if self.use_fp16:
+            self.model = self.model.half()
+        
+        # 设置为评估模式
+        self.model.eval()
+        
+        print(f"✅ 模型加载完成: {model_path}")
+    
+    @torch.no_grad()
+    def predict_image_text(
+        self,
+        image: Union[str, Image.Image],
+        texts: List[str],
+        return_probs: bool = True
+    ) -> Dict:
+        """
+        图文匹配推理
+        
+        Args:
+            image: 图像路径或PIL Image对象
+            texts: 候选文本列表
+            return_probs: 是否返回概率（否则返回logits）
+            
+        Returns:
+            预测结果字典
+        """
+        start_time = time.time()
+        
+        # 加载图像
+        if isinstance(image, str):
+            image = Image.open(image).convert('RGB')
+        elif not isinstance(image, Image.Image):
+            raise ValueError("image必须是文件路径或PIL.Image对象")
+        
+        # 预处理
+        inputs = self.processor(
+            text=texts,
+            images=image,
+            return_tensors="pt",
+            padding=True
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        if self.use_fp16:
+            inputs = {k: v.half() if v.dtype == torch.float32 else v 
+                     for k, v in inputs.items()}
+        
+        # 推理
+        outputs = self.model(**inputs)
+        logits = outputs.logits_per_image[0]
+        
+        # 计算概率或返回logits
+        if return_probs:
+            scores = logits.softmax(dim=0)
+        else:
+            scores = logits
+        
+        # 构建结果
+        results = [
+            {
+                "text": text,
+                "score": float(score),
+                "rank": idx + 1
+            }
+            for idx, (text, score) in enumerate(
+                sorted(zip(texts, scores.cpu().numpy()), 
+                      key=lambda x: x[1], reverse=True)
+            )
+        ]
+        
+        inference_time = time.time() - start_time
+        
+        return {
+            "results": results,
+            "inference_time_ms": inference_time * 1000,
+            "device": str(self.device),
+            "fp16": self.use_fp16
+        }
+    
+    @torch.no_grad()
+    def get_image_features(
+        self,
+        images: Union[List[str], List[Image.Image]],
+        normalize: bool = True
+    ) -> torch.Tensor:
+        """
+        提取图像特征
+        
+        Args:
+            images: 图像路径列表或PIL Image列表
+            normalize: 是否归一化特征向量
+            
+        Returns:
+            图像特征张量 (batch_size, feature_dim)
+        """
+        # 加载图像
+        pil_images = []
+        for img in images:
+            if isinstance(img, str):
+                pil_images.append(Image.open(img).convert('RGB'))
+            elif isinstance(img, Image.Image):
+                pil_images.append(img)
+            else:
+                raise ValueError("图像必须是文件路径或PIL.Image对象")
+        
+        # 预处理
+        inputs = self.processor(
+            images=pil_images,
+            return_tensors="pt"
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        if self.use_fp16:
+            inputs = {k: v.half() if v.dtype == torch.float32 else v 
+                     for k, v in inputs.items()}
+        
+        # 提取特征
+        features = self.model.get_image_features(**inputs)
+        
+        # 归一化
+        if normalize:
+            features = features / features.norm(dim=-1, keepdim=True)
+        
+        return features.cpu()
+    
+    @torch.no_grad()
+    def get_text_features(
+        self,
+        texts: List[str],
+        normalize: bool = True
+    ) -> torch.Tensor:
+        """
+        提取文本特征
+        
+        Args:
+            texts: 文本列表
+            normalize: 是否归一化特征向量
+            
+        Returns:
+            文本特征张量 (batch_size, feature_dim)
+        """
+        # 预处理
+        inputs = self.processor(
+            text=texts,
+            return_tensors="pt",
+            padding=True
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        if self.use_fp16:
+            inputs = {k: v.half() if v.dtype == torch.float32 else v 
+                     for k, v in inputs.items()}
+        
+        # 提取特征
+        features = self.model.get_text_features(**inputs)
+        
+        # 归一化
+        if normalize:
+            features = features / features.norm(dim=-1, keepdim=True)
+        
+        return features.cpu()
 
 # 创建FastAPI应用
 app = FastAPI(
