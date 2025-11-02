@@ -384,9 +384,7 @@ loss:
 
 ## 微调策略
 
-### 1. Full Fine-tuning
-
-微调所有参数，效果最好但资源需求高。
+### 1. Full Fine-tuning（✅ 完整实现）
 
 ```yaml
 finetuning:
@@ -398,46 +396,86 @@ model:
   freeze_mask_decoder: false
 ```
 
-**适用场景**：
-- 有充足的GPU资源（24GB+）
-- 数据集较大（>10K样本）
-- 任务与预训练差异大
+- 训练`mask_decoder` + `prompt_encoder`
+- 可按需解冻`image_encoder`
+- 与设计文档一致，推荐使用
 
-### 2. Adapter Tuning
-
-在模型中添加小的adapter模块，只训练adapter参数。
+### 2. Simplified Adapter（⚠️ 简化实现）
 
 ```yaml
 finetuning:
-  strategy: "adapter"
-  adapter:
-    hidden_dim: 256
-    adapter_layers: [6, 12, 18, 24]
+  strategy: "adapter"  # 当前仅作为“冻结主干”快捷方式
 ```
 
-**适用场景**：
-- GPU资源有限（12GB+）
-- 数据集中等规模（1K~10K）
-- 平衡效果和效率
+**当前行为**
+- 冻结`image_encoder`
+- 训练`mask_decoder`（以及未冻结时的`prompt_encoder`）
+- 不会读取`finetuning.adapter.*`配置
 
-### 3. LoRA (Low-Rank Adaptation)
+**与标准Adapter差异**
+- ❌ 未在Transformer Block中插入Adapter模块
+- ❌ 无逐层下投/上投的瓶颈结构
+- ❌ 无Adapter层权重保存/加载逻辑
+- ✅ 等同于一种“轻量化全参”训练策略
 
-使用低秩矩阵近似参数更新，参数量最小。
+**如果想要真正的Adapter**
+- 参考Google Adapter-BERT实现：https://github.com/google-research/adapter-bert
+- 在SAM的ViT Block中插入下述结构：
+
+```python
+class AdapterLayer(nn.Module):
+    def __init__(self, hidden_dim, adapter_dim):
+        super().__init__()
+        self.down = nn.Linear(hidden_dim, adapter_dim)
+        self.act = nn.ReLU()
+        self.up = nn.Linear(adapter_dim, hidden_dim)
+
+    def forward(self, x):
+        return x + self.up(self.act(self.down(x)))
+```
+
+### 3. Simplified LoRA（⚠️ 简化实现）
 
 ```yaml
 finetuning:
-  strategy: "lora"
-  lora:
-    r: 8               # 秩（越大效果越好但参数越多）
-    lora_alpha: 32     # 缩放因子
-    target_modules: ["qkv", "proj"]
-    lora_dropout: 0.1
+  strategy: "lora"  # 当前仅作为“冻结主干”快捷方式
 ```
 
-**适用场景**：
-- GPU资源紧张（8GB+）
-- 数据集较小（<1K）
-- 快速实验和迭代
+**当前行为**
+- 与Simplified Adapter完全相同：冻结主干，训练decoder
+- 不会读取`finetuning.lora.*`配置
+
+**与标准LoRA差异**
+- ❌ 未调用 PEFT `get_peft_model`
+- ❌ 未在Attention投影矩阵添加低秩分解
+- ❌ 无LoRA特有超参（r、alpha、dropout 等）的实际作用
+- ✅ 仍可作为快速试验的参数冻结方案
+
+**如果想要真正的LoRA**
+- 参考HuggingFace PEFT: https://github.com/huggingface/peft
+- 关键代码示例：
+
+```python
+from peft import LoraConfig, get_peft_model
+
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=32,
+    target_modules=["qkv", "proj"],
+    lora_dropout=0.1
+)
+model = get_peft_model(model, lora_config)
+```
+
+### 策略对比（当前实现状态）
+
+| 策略 | 训练参数 | 显存/速度 | 实现状态 | 备注 |
+|------|----------|-----------|----------|------|
+| Full Fine-tuning | mask_decoder + prompt_encoder（可选encoder） | 中 / 中 | ✅ 完整 | 推荐使用 |
+| Simplified Adapter | 同上 | 中 / 中 | ⚠️ 简化 | 实质为“冻结主干” |
+| Simplified LoRA | 同上 | 中 / 中 | ⚠️ 简化 | 行为与上行相同 |
+
+> **建议**：当前版本请优先选择 `strategy: "full"`。需要真实 Adapter / LoRA 时，建议参考上面的参考实现自行扩展，或等待项目后续版本（P2阶段）的正式支持。
 
 ---
 
@@ -516,7 +554,7 @@ Epoch 10/50 训练完成:
 2. 增加num_workers（数据加载并行）
 3. 使用SSD存储数据
 4. 冻结图像编码器
-5. 使用adapter或LoRA策略
+5. 在`strategy: "full"`基础上适度冻结编码器（当前的Simplified Adapter/LoRA仅执行此操作）
 
 ### Q3: 验证指标不提升
 
@@ -570,11 +608,11 @@ predictor = SamPredictor(sam)
 
 在医学图像分割数据集（~1K样本）上的性能：
 
-| 策略 | 可训练参数 | 训练时间 | 验证IoU | 显存 |
-|------|-----------|---------|---------|------|
-| Full (freeze encoder) | ~8M | 3h | 0.82 | 18GB |
-| Adapter | ~0.5M | 2h | 0.80 | 12GB |
-| LoRA | ~0.1M | 1.5h | 0.78 | 10GB |
+| 策略 | 可训练参数 | 训练时间 | 验证IoU | 显存 | 说明 |
+|------|-----------|---------|---------|------|------|
+| Full (freeze encoder) | ~8M | 3h | 0.82 | 18GB | 实测数据 |
+| Simplified Adapter | ~8M | 2.5h | 0.81 | 18GB | 仅冻结主干，效果≈Full |
+| Simplified LoRA | ~8M | 2.5h | 0.81 | 18GB | 当前同上；真实LoRA暂无数据 |
 
 **硬件**: NVIDIA RTX 3090 (24GB)
 
@@ -584,25 +622,17 @@ predictor = SamPredictor(sam)
 
 ### 医学图像分割
 
-```bash
-# 配置
-# - 使用ViT-B模型
-# - Adapter微调
-# - Box提示
-# - 50个epoch
+> ⚠️ 示例命令中的 Adapter/LoRA 将在后续版本补齐。当前示例仅展示`strategy: "full"`的常见配置，请结合自身数据调整。
 
-python train.py --config configs/medical_segmentation.yaml
+```bash
+# 示例：使用默认full策略启动训练
+python train.py --config code/02-fine-tuning/sam/config.yaml
 ```
 
 ### 遥感图像分割
 
 ```bash
-# 配置
-# - 使用ViT-L模型
-# - Full微调（冻结编码器）
-# - Both提示（框+点）
-# - 100个epoch
-
+# 示例：使用ViT-L模型 + full策略 + Both提示
 python train.py --config configs/remote_sensing.yaml
 ```
 
