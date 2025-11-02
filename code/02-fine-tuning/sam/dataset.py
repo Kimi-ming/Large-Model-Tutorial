@@ -246,25 +246,30 @@ class SAMSegmentationDataset(Dataset):
             points = []
             labels = []
             
-            # 前景点：从掩码内随机采样
+            # 前景点：从掩码内随机采样（固定数量）
             ys, xs = np.where(mask > 0)
             if len(ys) > 0:
-                for _ in range(min(self.num_points, len(ys))):
-                    idx = random.randint(0, len(ys) - 1)
+                # 确保每个样本都有相同数量的点
+                num_fg_points = min(self.num_points, len(ys))
+                indices = np.random.choice(len(ys), size=num_fg_points, replace=False)
+                for idx in indices:
                     points.append([xs[idx], ys[idx]])
                     labels.append(1)  # 前景
+                
+                # 如果前景点不足num_points，用掩码中心填充
+                while len(points) < self.num_points:
+                    center_y, center_x = ys.mean(), xs.mean()
+                    points.append([center_x, center_y])
+                    labels.append(1)
+            else:
+                # 空掩码，使用图像中心作为默认点
+                for _ in range(self.num_points):
+                    points.append([mask.shape[1] / 2, mask.shape[0] / 2])
+                    labels.append(1)
             
-            # 可选：添加背景点
-            if self.augment and random.random() > 0.7:
-                bg_ys, bg_xs = np.where(mask == 0)
-                if len(bg_ys) > 0:
-                    idx = random.randint(0, len(bg_ys) - 1)
-                    points.append([bg_xs[idx], bg_ys[idx]])
-                    labels.append(0)  # 背景
-            
-            if len(points) > 0:
-                prompts['points'] = np.array(points, dtype=np.float32)
-                prompts['point_labels'] = np.array(labels, dtype=np.int64)
+            # 确保所有样本的点数量一致
+            prompts['points'] = np.array(points, dtype=np.float32)
+            prompts['point_labels'] = np.array(labels, dtype=np.int64)
         
         return prompts
 
@@ -395,11 +400,9 @@ class COCODataset(SAMSegmentationDataset):
     
     def _load_mask(self, mask_info: Dict) -> np.ndarray:
         """从COCO标注生成掩码"""
-        ann = mask_info
-        img_info = self.samples[0]['image_info']  # 临时获取图像信息
-        
-        h, w = img_info['height'], img_info['width']
-        mask = np.zeros((h, w), dtype=np.uint8)
+        # 注意：这个方法在COCODataset的__getitem__中被调用
+        # mask_info实际是完整的sample字典，包含annotation和image_info
+        raise NotImplementedError("此方法不应被直接调用，由COCODataset重写")
         
         # 从RLE或polygon生成掩码
         if isinstance(ann['segmentation'], dict):
@@ -423,11 +426,31 @@ class COCODataset(SAMSegmentationDataset):
         # 加载图像
         image = self._load_image(sample['image_path'])
         
-        # 从标注生成掩码
-        mask = self._load_mask(sample['annotation'])
+        # 从标注生成掩码（使用正确的图像尺寸）
+        ann = sample['annotation']
+        img_info = sample['image_info']
+        h, w = img_info['height'], img_info['width']
+        
+        mask = np.zeros((h, w), dtype=np.uint8)
+        
+        # 从RLE或polygon生成掩码
+        if isinstance(ann['segmentation'], dict):
+            # RLE格式
+            try:
+                from pycocotools import mask as mask_utils
+                rle = ann['segmentation']
+                mask = mask_utils.decode(rle)
+            except ImportError:
+                print("警告: pycocotools未安装，无法解析RLE格式")
+        else:
+            # Polygon格式
+            import cv2
+            for seg in ann['segmentation']:
+                poly = np.array(seg).reshape(-1, 2).astype(np.int32)
+                cv2.fillPoly(mask, [poly], 1)
         
         # 记录原始尺寸
-        original_size = (sample['image_info']['height'], sample['image_info']['width'])
+        original_size = (h, w)
         
         # 数据增强
         if self.augment:

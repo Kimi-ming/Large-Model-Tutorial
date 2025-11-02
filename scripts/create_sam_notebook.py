@@ -40,7 +40,7 @@ notebook = {
             "execution_count": None,
             "metadata": {},
             "outputs": [],
-            "source": "# 加载示例图像\nimage_path = \"sample_image.jpg\"\nimage = Image.open(image_path).convert(\"RGB\")\nimage = np.array(image)\n\n# 显示图像\nplt.figure(figsize=(10, 10))\nplt.imshow(image)\nplt.title(\"原始图像\")\nplt.axis('off')\nplt.show()\n\n# 设置到预测器\npredictor.set_image(image)\nprint(\"✅ 图像已设置\")"
+            "source": "# 准备示例图像\nimport os\n\n# 方案1：尝试从网络下载示例图像\nimage_url = \"https://raw.githubusercontent.com/facebookresearch/segment-anything/main/notebooks/images/truck.jpg\"\nimage_path = \"sample_image.jpg\"\n\ntry:\n    if not os.path.exists(image_path):\n        print(\"📥 下载示例图像...\")\n        urllib.request.urlretrieve(image_url, image_path)\n        print(\"✅ 下载成功\")\nexcept Exception as e:\n    print(f\"⚠️ 下载失败: {e}\")\n    print(\"生成测试图像...\")\n    # 方案2：生成一个简单的测试图像\n    test_image = np.random.randint(0, 255, (400, 600, 3), dtype=np.uint8)\n    # 绘制一些形状\n    import cv2\n    cv2.rectangle(test_image, (100, 100), (500, 300), (255, 0, 0), -1)\n    cv2.circle(test_image, (300, 200), 50, (0, 255, 0), -1)\n    Image.fromarray(test_image).save(image_path)\n    print(\"✅ 生成测试图像\")\n\n# 加载图像\nimage = Image.open(image_path).convert(\"RGB\")\nimage = np.array(image)\n\n# 显示图像\nplt.figure(figsize=(10, 10))\nplt.imshow(image)\nplt.title(\"原始图像\")\nplt.axis('off')\nplt.show()\n\n# 设置到预测器\npredictor.set_image(image)\nprint(\"✅ 图像已设置\")"
         },
         {
             "cell_type": "markdown",

@@ -199,39 +199,52 @@ class SAMTrainer:
     
     def _setup_adapter_finetuning(self, model: nn.Module):
         """设置Adapter微调"""
-        print("  Adapter微调（简化实现，冻结大部分参数）")
+        print("  ⚠️  警告：当前实现为简化版Adapter（仅训练mask_decoder）")
+        print("  完整的Adapter实现需要在Transformer层插入adapter模块")
+        print("  参考：https://github.com/google-research/adapter-bert")
         
         # 冻结所有参数
         for param in model.parameters():
             param.requires_grad = False
         
-        # 只微调掩码解码器（作为adapter）
+        # 只微调掩码解码器
         for param in model.mask_decoder.parameters():
             param.requires_grad = True
         
-        print("  注意：这是简化的Adapter实现，实际应在Transformer层添加adapter模块")
+        # 可选：也微调prompt encoder（轻量级）
+        if not self.config['model']['freeze_prompt_encoder']:
+            for param in model.prompt_encoder.parameters():
+                param.requires_grad = True
+        
+        print("  当前策略：冻结image_encoder，训练mask_decoder和prompt_encoder")
     
     def _setup_lora_finetuning(self, model: nn.Module):
         """设置LoRA微调"""
+        print("  ⚠️  警告：当前实现为简化版LoRA（等同于adapter模式）")
+        print("  SAM的LoRA微调需要使用PEFT库并指定target_modules")
+        print("  参考配置：target_modules=['qkv', 'proj'] for ViT")
+        
         try:
             from peft import LoraConfig, get_peft_model
-            
-            print("  配置LoRA...")
-            lora_config_dict = self.config['finetuning']['lora']
-            
-            # 注意：SAM的PEFT支持可能需要额外的适配
-            print("  注意：SAM的LoRA微调需要特殊适配，这里使用简化实现")
-            
-            # 简化实现：只微调mask_decoder
-            for param in model.parameters():
-                param.requires_grad = False
-            
-            for param in model.mask_decoder.parameters():
-                param.requires_grad = True
-            
+            print("  ✅ PEFT库已安装，但SAM模型架构需要特殊适配")
+            print("  当前回退到简化模式：仅训练mask_decoder")
         except ImportError:
-            print("  ⚠️ peft库未安装，回退到adapter模式")
-            self._setup_adapter_finetuning(model)
+            print("  ⚠️  PEFT库未安装")
+            print("  安装方法: pip install peft")
+        
+        # 简化实现：冻结大部分，只训练decoder
+        for param in model.parameters():
+            param.requires_grad = False
+        
+        for param in model.mask_decoder.parameters():
+            param.requires_grad = True
+        
+        if not self.config['model']['freeze_prompt_encoder']:
+            for param in model.prompt_encoder.parameters():
+                param.requires_grad = True
+        
+        print("  当前策略：冻结image_encoder，训练mask_decoder和prompt_encoder")
+        print("  如需真正的LoRA，请参考: https://github.com/huggingface/peft")
     
     def _create_dataloaders(self) -> tuple:
         """创建数据加载器"""
