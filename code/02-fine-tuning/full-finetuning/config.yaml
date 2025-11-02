@@ -1,0 +1,81 @@
+# 全参数微调配置文件
+
+# 模型配置
+model:
+  name: "openai/clip-vit-base-patch32"  # 预训练模型名称
+  cache_dir: "models/"  # 模型缓存目录
+  
+# 数据配置
+data:
+  data_dir: "data/dogs"  # 数据集根目录
+  batch_size: 16  # 批次大小（全参数微调需要更小的batch size）
+  num_workers: 4  # 数据加载线程数
+  pin_memory: true  # 是否使用固定内存（GPU训练推荐）
+  
+# 训练配置
+training:
+  num_epochs: 20  # 训练轮数
+  base_learning_rate: 1.0e-5  # 基础学习率（全参数微调通常更小）
+  weight_decay: 0.01  # 权重衰减
+  warmup_ratio: 0.1  # 预热比例
+  gradient_accumulation_steps: 2  # 梯度累积步数（模拟更大的batch size）
+  max_grad_norm: 1.0  # 梯度裁剪阈值
+  
+  # 分层学习率
+  layerwise_lr:
+    enabled: true  # 是否启用分层学习率
+    decay_rate: 0.95  # 层间学习率衰减率
+    
+  # 渐进式解冻
+  progressive_unfreezing:
+    enabled: false  # 是否启用渐进式解冻（可选）
+    unfreeze_schedule:  # 解冻时间表
+      - epoch: 0
+        layers: ["classifier"]  # 第0轮只训练分类头
+      - epoch: 2
+        layers: ["vision_model.encoder.layers.11"]  # 第2轮解冻最后一层
+      - epoch: 4
+        layers: ["vision_model.encoder.layers.10"]
+      - epoch: 6
+        layers: ["all"]  # 第6轮解冻所有层
+  
+  # 学习率调度器
+  lr_scheduler:
+    type: "cosine"  # 类型: "linear", "cosine", "constant"
+    num_cycles: 0.5  # cosine调度器的周期数
+  
+  # 早停
+  early_stopping:
+    enabled: true
+    patience: 5  # 容忍轮数（全参数微调需要更多耐心）
+    min_delta: 0.001  # 最小改善量
+  
+# 评估配置
+evaluation:
+  eval_steps: 200  # 每N步评估一次
+  save_steps: 500  # 每N步保存一次
+  logging_steps: 50  # 每N步记录一次
+  
+# 输出配置
+output:
+  output_dir: "outputs/full_finetuning"  # 输出目录
+  save_total_limit: 3  # 最多保存N个检查点
+  log_dir: "logs/full_finetuning"  # 日志目录
+  
+# 硬件配置
+hardware:
+  device: "cuda"  # 设备: "cuda", "cpu", "mps"
+  mixed_precision: true  # 是否使用混合精度训练（FP16，强烈推荐）
+  
+# 随机种子
+seed: 42
+
+# 注意事项
+# 1. 全参数微调需要更大的显存（建议24GB+）
+# 2. 如果显存不足，可以：
+#    - 减小 batch_size (8 或更小)
+#    - 增大 gradient_accumulation_steps (4 或更大)
+#    - 启用 mixed_precision
+# 3. 训练时间会比LoRA长很多
+# 4. 建议使用多GPU训练（如果可用）
+

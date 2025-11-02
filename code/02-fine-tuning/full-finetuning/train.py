@@ -1,0 +1,549 @@
+"""
+全参数微调训练脚本
+
+对CLIP模型进行全参数微调（更新所有参数）
+"""
+
+import os
+import sys
+import argparse
+import yaml
+from pathlib import Path
+from typing import Dict, Any, List
+import random
+import numpy as np
+
+import torch
+import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
+from transformers import CLIPModel, CLIPProcessor, get_cosine_schedule_with_warmup
+from tqdm import tqdm
+
+# 添加项目根目录到路径
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+# 复用LoRA的数据集类
+sys.path.insert(0, str(project_root / "code" / "02-fine-tuning" / "lora"))
+from dataset import create_dataloaders
+
+
+def set_seed(seed: int):
+    """设置随机种子以确保可复现性"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
+def load_config(config_path: str) -> Dict[str, Any]:
+    """加载配置文件"""
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+    return config
+
+
+class CLIPClassifier(nn.Module):
+    """
+    CLIP分类器（全参数微调版本）
+    
+    在CLIP视觉编码器基础上添加分类头，并允许微调所有参数
+    """
+    
+    def __init__(self, clip_model: CLIPModel, num_classes: int):
+        super().__init__()
+        self.clip_model = clip_model
+        self.vision_model = clip_model.vision_model
+        
+        # 获取视觉编码器的输出维度
+        hidden_size = self.vision_model.config.hidden_size
+        
+        # 添加分类头
+        self.classifier = nn.Linear(hidden_size, num_classes)
+        
+        # 初始化分类头
+        nn.init.normal_(self.classifier.weight, std=0.02)
+        nn.init.zeros_(self.classifier.bias)
+        
+        # 解冻所有参数
+        for param in self.parameters():
+            param.requires_grad = True
+    
+    def forward(self, pixel_values: torch.Tensor) -> torch.Tensor:
+        # 通过CLIP视觉编码器
+        vision_outputs = self.vision_model(pixel_values=pixel_values)
+        
+        # 获取[CLS] token的输出
+        pooled_output = vision_outputs.pooler_output
+        
+        # 分类
+        logits = self.classifier(pooled_output)
+        
+        return logits
+    
+    def freeze_layers(self, layer_names: List[str]):
+        """
+        冻结指定层
+        
+        Args:
+            layer_names: 要冻结的层名称列表
+        """
+        for name, param in self.named_parameters():
+            for layer_name in layer_names:
+                if layer_name in name:
+                    param.requires_grad = False
+                    break
+    
+    def unfreeze_layers(self, layer_names: List[str]):
+        """
+        解冻指定层
+        
+        Args:
+            layer_names: 要解冻的层名称列表，"all"表示解冻所有层
+        """
+        if "all" in layer_names:
+            for param in self.parameters():
+                param.requires_grad = True
+        else:
+            for name, param in self.named_parameters():
+                for layer_name in layer_names:
+                    if layer_name in name:
+                        param.requires_grad = True
+                        break
+
+
+def get_parameter_groups(
+    model: nn.Module,
+    base_lr: float,
+    decay_rate: float = 0.95
+) -> List[Dict[str, Any]]:
+    """
+    为不同层设置不同的学习率（分层学习率）
+    
+    底层（接近输入）学习率更小，顶层（接近输出）学习率更大
+    
+    Args:
+        model: 模型
+        base_lr: 基础学习率
+        decay_rate: 层间学习率衰减率
+        
+    Returns:
+        参数组列表
+    """
+    parameter_groups = []
+    
+    # 获取视觉编码器的层数
+    if hasattr(model, 'vision_model'):
+        vision_model = model.vision_model
+    else:
+        vision_model = model.clip_model.vision_model
+    
+    num_layers = len(vision_model.encoder.layers)
+    
+    # 为每一层设置不同的学习率
+    for i, layer in enumerate(vision_model.encoder.layers):
+        # 底层使用更小的学习率
+        lr = base_lr * (decay_rate ** (num_layers - i - 1))
+        parameter_groups.append({
+            'params': layer.parameters(),
+            'lr': lr,
+            'name': f'encoder.layer.{i}'
+        })
+    
+    # 其他参数使用基础学习率
+    other_params = []
+    for name, param in model.named_parameters():
+        if 'encoder.layers' not in name and param.requires_grad:
+            other_params.append(param)
+    
+    if other_params:
+        parameter_groups.append({
+            'params': other_params,
+            'lr': base_lr,
+            'name': 'other'
+        })
+    
+    return parameter_groups
+
+
+class Trainer:
+    """全参数微调训练器"""
+    
+    def __init__(
+        self,
+        model: nn.Module,
+        train_loader: torch.utils.data.DataLoader,
+        val_loader: torch.utils.data.DataLoader,
+        config: Dict[str, Any],
+        device: torch.device
+    ):
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.config = config
+        self.device = device
+        
+        # 优化器（支持分层学习率）
+        if config['training']['layerwise_lr']['enabled']:
+            print("✅ 启用分层学习率")
+            parameter_groups = get_parameter_groups(
+                model,
+                base_lr=config['training']['base_learning_rate'],
+                decay_rate=config['training']['layerwise_lr']['decay_rate']
+            )
+            self.optimizer = torch.optim.AdamW(
+                parameter_groups,
+                weight_decay=config['training']['weight_decay']
+            )
+        else:
+            self.optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=config['training']['base_learning_rate'],
+                weight_decay=config['training']['weight_decay']
+            )
+        
+        # 学习率调度器
+        total_steps = len(train_loader) * config['training']['num_epochs']
+        total_steps = total_steps // config['training']['gradient_accumulation_steps']
+        warmup_steps = int(total_steps * config['training']['warmup_ratio'])
+        
+        self.scheduler = get_cosine_schedule_with_warmup(
+            self.optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps
+        )
+        
+        # 损失函数
+        self.criterion = nn.CrossEntropyLoss()
+        
+        # TensorBoard
+        log_dir = config['output']['log_dir']
+        os.makedirs(log_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir)
+        
+        # 输出目录
+        self.output_dir = config['output']['output_dir']
+        os.makedirs(self.output_dir, exist_ok=True)
+        
+        # 训练状态
+        self.global_step = 0
+        self.best_val_acc = 0.0
+        self.patience_counter = 0
+        
+        # 混合精度训练
+        self.use_amp = config['hardware']['mixed_precision'] and torch.cuda.is_available()
+        if self.use_amp:
+            self.scaler = torch.cuda.amp.GradScaler()
+            print("✅ 启用混合精度训练（FP16）")
+        
+        # 渐进式解冻
+        self.progressive_unfreezing = config['training']['progressive_unfreezing']['enabled']
+        if self.progressive_unfreezing:
+            self.unfreeze_schedule = config['training']['progressive_unfreezing']['unfreeze_schedule']
+            print("✅ 启用渐进式解冻")
+    
+    def apply_progressive_unfreezing(self, epoch: int):
+        """
+        应用渐进式解冻策略
+        
+        Args:
+            epoch: 当前轮数
+        """
+        if not self.progressive_unfreezing:
+            return
+        
+        for schedule in self.unfreeze_schedule:
+            if epoch == schedule['epoch']:
+                layers = schedule['layers']
+                print(f"\n🔓 解冻层: {layers}")
+                self.model.unfreeze_layers(layers)
+                
+                # 打印可训练参数数量
+                trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+                total_params = sum(p.numel() for p in self.model.parameters())
+                print(f"   可训练参数: {trainable_params:,} ({100 * trainable_params / total_params:.2f}%)")
+                break
+    
+    def train_epoch(self, epoch: int) -> Dict[str, float]:
+        """训练一个epoch"""
+        self.model.train()
+        
+        # 应用渐进式解冻
+        self.apply_progressive_unfreezing(epoch)
+        
+        total_loss = 0.0
+        correct = 0
+        total = 0
+        
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch}")
+        accumulation_steps = self.config['training']['gradient_accumulation_steps']
+        
+        for batch_idx, (pixel_values, labels) in enumerate(pbar):
+            pixel_values = pixel_values.to(self.device)
+            labels = labels.to(self.device)
+            
+            # 前向传播
+            if self.use_amp:
+                with torch.cuda.amp.autocast():
+                    logits = self.model(pixel_values)
+                    loss = self.criterion(logits, labels)
+                    loss = loss / accumulation_steps  # 归一化
+            else:
+                logits = self.model(pixel_values)
+                loss = self.criterion(logits, labels)
+                loss = loss / accumulation_steps
+            
+            # 反向传播
+            if self.use_amp:
+                self.scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            
+            # 梯度累积
+            if (batch_idx + 1) % accumulation_steps == 0:
+                if self.use_amp:
+                    # 梯度裁剪
+                    if self.config['training']['max_grad_norm'] > 0:
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(),
+                            self.config['training']['max_grad_norm']
+                        )
+                    
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    # 梯度裁剪
+                    if self.config['training']['max_grad_norm'] > 0:
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(),
+                            self.config['training']['max_grad_norm']
+                        )
+                    
+                    self.optimizer.step()
+                
+                self.optimizer.zero_grad()
+                self.scheduler.step()
+                self.global_step += 1
+            
+            # 统计
+            total_loss += loss.item() * accumulation_steps
+            _, predicted = torch.max(logits, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            
+            # 更新进度条
+            pbar.set_postfix({
+                'loss': f'{loss.item() * accumulation_steps:.4f}',
+                'acc': f'{100.0 * correct / total:.2f}%',
+                'lr': f'{self.optimizer.param_groups[0]["lr"]:.2e}'
+            })
+            
+            # 记录日志
+            if self.global_step % self.config['evaluation']['logging_steps'] == 0:
+                self.writer.add_scalar('train/loss', loss.item() * accumulation_steps, self.global_step)
+                self.writer.add_scalar('train/accuracy', 100.0 * correct / total, self.global_step)
+                self.writer.add_scalar('train/learning_rate', self.optimizer.param_groups[0]['lr'], self.global_step)
+        
+        avg_loss = total_loss / len(self.train_loader)
+        accuracy = 100.0 * correct / total
+        
+        return {'loss': avg_loss, 'accuracy': accuracy}
+    
+    @torch.no_grad()
+    def evaluate(self) -> Dict[str, float]:
+        """评估模型"""
+        self.model.eval()
+        
+        total_loss = 0.0
+        correct = 0
+        total = 0
+        
+        for pixel_values, labels in tqdm(self.val_loader, desc="Evaluating"):
+            pixel_values = pixel_values.to(self.device)
+            labels = labels.to(self.device)
+            
+            # 前向传播
+            logits = self.model(pixel_values)
+            loss = self.criterion(logits, labels)
+            
+            # 统计
+            total_loss += loss.item()
+            _, predicted = torch.max(logits, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+        
+        avg_loss = total_loss / len(self.val_loader)
+        accuracy = 100.0 * correct / total
+        
+        return {'loss': avg_loss, 'accuracy': accuracy}
+    
+    def save_checkpoint(self, epoch: int, val_metrics: Dict[str, float]):
+        """保存检查点"""
+        checkpoint_dir = os.path.join(self.output_dir, f'checkpoint-epoch-{epoch}')
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        
+        # 保存完整模型
+        self.model.clip_model.save_pretrained(checkpoint_dir)
+        
+        # 保存分类头
+        torch.save(
+            self.model.classifier.state_dict(),
+            os.path.join(checkpoint_dir, 'classifier.pt')
+        )
+        
+        # 保存训练状态
+        torch.save({
+            'epoch': epoch,
+            'global_step': self.global_step,
+            'best_val_acc': self.best_val_acc,
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+            'val_metrics': val_metrics,
+        }, os.path.join(checkpoint_dir, 'training_state.pt'))
+        
+        print(f"✅ 检查点已保存: {checkpoint_dir}")
+    
+    def train(self):
+        """完整训练流程"""
+        print("\n" + "=" * 60)
+        print("开始全参数微调训练")
+        print("=" * 60)
+        
+        # 打印可训练参数
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in self.model.parameters())
+        print(f"可训练参数: {trainable_params:,} ({100 * trainable_params / total_params:.2f}%)")
+        
+        num_epochs = self.config['training']['num_epochs']
+        early_stopping_patience = self.config['training']['early_stopping']['patience']
+        
+        for epoch in range(1, num_epochs + 1):
+            print(f"\n📊 Epoch {epoch}/{num_epochs}")
+            
+            # 训练
+            train_metrics = self.train_epoch(epoch)
+            print(f"   训练 - Loss: {train_metrics['loss']:.4f}, Acc: {train_metrics['accuracy']:.2f}%")
+            
+            # 评估
+            val_metrics = self.evaluate()
+            print(f"   验证 - Loss: {val_metrics['loss']:.4f}, Acc: {val_metrics['accuracy']:.2f}%")
+            
+            # 记录到TensorBoard
+            self.writer.add_scalar('val/loss', val_metrics['loss'], epoch)
+            self.writer.add_scalar('val/accuracy', val_metrics['accuracy'], epoch)
+            
+            # 保存最佳模型
+            if val_metrics['accuracy'] > self.best_val_acc:
+                self.best_val_acc = val_metrics['accuracy']
+                self.save_checkpoint(epoch, val_metrics)
+                self.patience_counter = 0
+                print(f"   🎉 新的最佳验证准确率: {self.best_val_acc:.2f}%")
+            else:
+                self.patience_counter += 1
+            
+            # 早停
+            if self.config['training']['early_stopping']['enabled']:
+                if self.patience_counter >= early_stopping_patience:
+                    print(f"\n⚠️  早停触发！验证准确率已 {early_stopping_patience} 轮未提升")
+                    break
+        
+        print("\n" + "=" * 60)
+        print(f"✅ 训练完成！最佳验证准确率: {self.best_val_acc:.2f}%")
+        print("=" * 60)
+        
+        self.writer.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="全参数微调训练脚本")
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='code/02-fine-tuning/full-finetuning/config.yaml',
+        help='配置文件路径'
+    )
+    parser.add_argument(
+        '--data_dir',
+        type=str,
+        help='数据集目录（覆盖配置文件）'
+    )
+    parser.add_argument(
+        '--output_dir',
+        type=str,
+        help='输出目录（覆盖配置文件）'
+    )
+    
+    args = parser.parse_args()
+    
+    # 加载配置
+    config = load_config(args.config)
+    
+    # 命令行参数覆盖配置
+    if args.data_dir:
+        config['data']['data_dir'] = args.data_dir
+    if args.output_dir:
+        config['output']['output_dir'] = args.output_dir
+    
+    # 设置随机种子
+    set_seed(config['seed'])
+    
+    # 设置设备
+    device = torch.device(config['hardware']['device'] if torch.cuda.is_available() else 'cpu')
+    print(f"🖥️  使用设备: {device}")
+    
+    if torch.cuda.is_available():
+        print(f"   GPU: {torch.cuda.get_device_name(0)}")
+        print(f"   显存: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+    
+    # 加载处理器
+    print("\n📦 加载CLIP处理器...")
+    processor = CLIPProcessor.from_pretrained(
+        config['model']['name'],
+        cache_dir=config['model']['cache_dir']
+    )
+    
+    # 创建数据加载器
+    print("\n📊 准备数据...")
+    train_loader, val_loader, test_loader = create_dataloaders(
+        data_dir=config['data']['data_dir'],
+        processor=processor,
+        batch_size=config['data']['batch_size'],
+        num_workers=config['data']['num_workers'],
+        pin_memory=config['data']['pin_memory']
+    )
+    
+    # 获取类别数
+    num_classes = len(train_loader.dataset.classes)
+    print(f"   类别数: {num_classes}")
+    
+    # 加载预训练模型
+    print("\n🤖 加载预训练CLIP模型...")
+    clip_model = CLIPModel.from_pretrained(
+        config['model']['name'],
+        cache_dir=config['model']['cache_dir']
+    )
+    
+    # 创建分类器（全参数微调）
+    model = CLIPClassifier(clip_model, num_classes)
+    model = model.to(device)
+    
+    # 创建训练器
+    trainer = Trainer(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        config=config,
+        device=device
+    )
+    
+    # 开始训练
+    trainer.train()
+
+
+if __name__ == '__main__':
+    main()
+
