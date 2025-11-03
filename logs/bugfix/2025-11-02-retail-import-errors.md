@@ -415,12 +415,71 @@ result = recognizer.recognize("product.jpg")
 
 ---
 
-**相关提交**: [即将提交]  
-**相关任务**: p1-10-retail-app  
-**Bug序号**: #10  
-**感谢**: 用户的细致code review，避免了大量用户困惑！
+## 🔄 补充修复 (2025-11-02)
+
+### 问题：首次修复不彻底
+
+第一次修复后，文档中仍存在问题：
+- 使用了 `from code.applications.retail import ...` 
+- 实际路径是 `code/05-applications/retail/`
+- 目录名包含连字符，无法直接import
+
+### 最终修复方案
+
+采用两种推荐方式：
+
+**方式1：命令行运行（最推荐）**
+```bash
+python code/05-applications/retail/product_recognizer.py --image test.jpg
+python code/05-applications/retail/shelf_analyzer.py --image shelf.jpg --expected 可乐 雪碧
+```
+
+**方式2：Python代码中使用（使用exec加载）**
+```python
+import sys
+import os
+
+project_root = 'path/to/Large-Model-Tutorial'
+sys.path.insert(0, project_root)
+
+# 使用exec加载模块（处理连字符目录名）
+exec(open(os.path.join(project_root, 'code/05-applications/retail/product_recognizer.py'), 'r', encoding='utf-8').read(), globals())
+exec(open(os.path.join(project_root, 'code/05-applications/retail/shelf_analyzer.py'), 'r', encoding='utf-8').read(), globals())
+
+# 现在可以使用类
+recognizer = ProductRecognizer()
+analyzer = ShelfAnalyzer(recognizer)
+```
+
+### 为什么不能直接import？
+
+```python
+# ❌ 不能这样（目录名包含连字符）
+from code.05-applications.retail.product_recognizer import ProductRecognizer
+# SyntaxError: invalid syntax
+
+# ❌ 也不能这样（Python不识别连字符作为标识符）
+import code.05-applications.retail.product_recognizer
+# SyntaxError: invalid syntax
+```
+
+### 解决方案对比
+
+| 方案 | 优点 | 缺点 | 推荐度 |
+|------|------|------|--------|
+| 命令行运行 | 最简单，无需导入 | 不能在代码中复用 | ⭐⭐⭐⭐⭐ |
+| exec加载 | 可在代码中使用 | 代码稍复杂 | ⭐⭐⭐⭐ |
+| importlib | 标准库方案 | 代码更复杂 | ⭐⭐⭐ |
+| 重命名目录 | 彻底解决 | 需要大规模重构 | ⭐⭐ |
 
 ---
 
-*第10个bug修复完成！文档质量持续提升！*
+**相关提交**: [即将提交]  
+**相关任务**: p1-10-retail-app  
+**Bug序号**: #10  
+**感谢**: 用户的持续细致code review，确保文档100%可用！
+
+---
+
+*第10个bug修复完成（第2轮彻底修复）！文档质量持续提升！*
 
