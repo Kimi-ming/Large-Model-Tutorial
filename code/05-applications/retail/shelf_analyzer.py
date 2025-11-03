@@ -74,7 +74,16 @@ class ShelfAnalyzer:
         missing_products = []
         if expected_products and self.recognizer:
             detected_names = [p['name'] for p in analysis['detected_products']]
-            missing_products = [p for p in expected_products if p not in detected_names]
+            # 使用模糊匹配：检查期望商品是否包含在检测到的商品名称中
+            for expected in expected_products:
+                found = False
+                for detected in detected_names:
+                    # 支持简称匹配：如"可乐"可以匹配"可口可乐 330ml"
+                    if expected in detected or detected in expected:
+                        found = True
+                        break
+                if not found:
+                    missing_products.append(expected)
         
         # 生成建议
         recommendations = []

@@ -52,10 +52,15 @@ python product_recognizer.py \
 ```bash
 python shelf_analyzer.py \
     --image shelf.jpg \
-    --expected 可乐 雪碧 芬达 \
+    --expected 可乐 雪碧 芬达 \  # 支持简称，会模糊匹配"可口可乐 330ml"等
     --threshold 0.8 \
     --visualize \
     --output analysis.jpg
+
+# 注意：--expected 支持简称匹配
+# "可乐" 可匹配 "可口可乐 330ml"
+# "雪碧" 可匹配 "雪碧 330ml"
+# 也可使用完整名称："可口可乐 330ml" "雪碧 330ml"
 ```
 
 **输出示例**:
