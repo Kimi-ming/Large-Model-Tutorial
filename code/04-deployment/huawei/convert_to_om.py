@@ -113,7 +113,7 @@ class ModelConverter:
     def convert_pytorch_to_onnx(
         self,
         model,
-        dummy_input: dict,
+        dummy_input,  # 可以是tuple, dict, 或单个tensor
         output_path: str,
         input_names: list,
         output_names: list,
@@ -125,7 +125,7 @@ class ModelConverter:
         
         Args:
             model: PyTorch模型
-            dummy_input: 示例输入
+            dummy_input: 示例输入（tuple of tensors, dict of tensors, or single tensor）
             output_path: 输出ONNX路径
             input_names: 输入名称列表
             output_names: 输出名称列表
@@ -202,12 +202,10 @@ class ModelConverter:
         model = CLIPModel.from_pretrained(model_path)
         model.eval()
         
-        # 准备示例输入
-        dummy_input = {
-            'input_ids': torch.randint(0, 1000, (batch_size, text_length)),
-            'pixel_values': torch.randn(batch_size, 3, image_size, image_size),
-            'attention_mask': torch.ones(batch_size, text_length, dtype=torch.long)
-        }
+        # 准备示例输入（CLIP模型需要这三个张量）
+        input_ids = torch.randint(0, 1000, (batch_size, text_length))
+        pixel_values = torch.randn(batch_size, 3, image_size, image_size)
+        attention_mask = torch.ones(batch_size, text_length, dtype=torch.long)
         
         # 导出ONNX
         onnx_path = str(output_dir / "clip_model.onnx")
@@ -222,9 +220,11 @@ class ModelConverter:
                 'logits_per_text': {0: 'batch_size'}
             }
         
+        # ⚠️ 关键修复：torch.onnx.export 需要张量元组，不是字典元组
+        # CLIP.forward() 接受位置参数：forward(input_ids, pixel_values, attention_mask)
         success = self.convert_pytorch_to_onnx(
             model=model,
-            dummy_input=(dummy_input,),
+            dummy_input=(input_ids, pixel_values, attention_mask),  # 正确：张量元组
             output_path=onnx_path,
             input_names=['input_ids', 'pixel_values', 'attention_mask'],
             output_names=['logits_per_image', 'logits_per_text'],
