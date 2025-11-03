@@ -6,11 +6,14 @@
 
 ```
 retail/
-├── product_recognizer.py  # 商品识别器
-├── shelf_analyzer.py       # 货架分析器
-├── app.py                  # FastAPI服务（待补充）
-├── config.yaml             # 配置文件（待补充）
-└── README.md               # 本文件
+├── product_recognizer.py  # 商品识别器 ✅ 已实现
+├── shelf_analyzer.py       # 货架分析器 ✅ 已实现
+├── README.md               # 本文件
+├── __init__.py             # Python包初始化
+│
+└── （规划中 - P2阶段）
+    ├── app.py              # FastAPI服务
+    └── config.yaml         # 配置文件
 ```
 
 ## 🚀 快速开始
