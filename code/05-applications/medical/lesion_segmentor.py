@@ -624,6 +624,31 @@ class LesionSegmentor:
             (0, 255, 255),  # 青
         ]
         return colors[index % len(colors)]
+    
+    def segment_batch(
+        self,
+        images: List[np.ndarray],
+        batch_size: int = 8,
+        **kwargs
+    ) -> List[List[Dict]]:
+        """
+        批量分割图像
+        
+        Args:
+            images: 图像列表
+            batch_size: 批处理大小
+            **kwargs: 传递给segment_auto的参数
+            
+        Returns:
+            分割结果列表（每个图像可能有多个病灶）
+        """
+        results = []
+        for i in range(0, len(images), batch_size):
+            batch = images[i:i+batch_size]
+            for image in batch:
+                result = self.segment_auto(image, **kwargs)
+                results.append(result)
+        return results
 
 
 def main():
@@ -780,6 +805,72 @@ def main():
         segmentor.save_nifti(result_3d['mask_3d'], args.output)
     
     print("\n完成！")
+
+
+# DICOM辅助函数
+
+def apply_window(image_array: np.ndarray, window_center: float, window_width: float) -> np.ndarray:
+    """
+    应用窗宽窗位
+    
+    Args:
+        image_array: 原始DICOM图像数组（HU值）
+        window_center: 窗位（Window Center）
+        window_width: 窗宽（Window Width）
+        
+    Returns:
+        调整后的图像数组（0-255）
+    """
+    # 计算窗口上下限
+    min_value = window_center - window_width / 2
+    max_value = window_center + window_width / 2
+    
+    # 应用窗口
+    windowed = np.clip(image_array, min_value, max_value)
+    
+    # 归一化到0-255
+    windowed = ((windowed - min_value) / (max_value - min_value) * 255).astype(np.uint8)
+    
+    # 转换为RGB
+    windowed_rgb = cv2.cvtColor(windowed, cv2.COLOR_GRAY2RGB)
+    
+    return windowed_rgb
+
+
+def save_dicom_rtstruct(mask: np.ndarray, original_dicom, output_path: str):
+    """
+    保存分割结果为DICOM RT Structure Set
+    
+    Args:
+        mask: 分割掩码
+        original_dicom: 原始DICOM对象（pydicom.Dataset）
+        output_path: 输出路径
+        
+    注意：需要pydicom和rt-utils库
+    """
+    try:
+        import pydicom
+        from rt_utils import RTStructBuilder
+    except ImportError:
+        warnings.warn(
+            "未安装pydicom或rt-utils，无法保存DICOM RT Structure。\n"
+            "请运行: pip install pydicom rt-utils"
+        )
+        return
+    
+    # 创建RT Structure Builder
+    rtstruct = RTStructBuilder.create_new(dicom_series_path=os.path.dirname(original_dicom.filename))
+    
+    # 添加ROI（Region of Interest）
+    rtstruct.add_roi(
+        mask=mask,
+        color=[255, 0, 0],  # 红色
+        name="Lesion"
+    )
+    
+    # 保存
+    rtstruct.save(output_path)
+    print(f"保存DICOM RT Structure: {output_path}")
 
 
 if __name__ == '__main__':

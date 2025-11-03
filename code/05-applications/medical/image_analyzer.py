@@ -50,6 +50,18 @@ class MedicalImageAnalyzer:
             'sections': ['lungs', 'heart', 'mediastinum', 'bones'],
             'impression': True
         },
+        'ct': {  # 添加通用CT模板
+            'sections': ['organs', 'vessels', 'bones', 'soft_tissue'],
+            'impression': True
+        },
+        'mri': {  # 添加通用MRI模板
+            'sections': ['signal_intensity', 'anatomy', 'abnormalities'],
+            'impression': True
+        },
+        'pathology': {  # 添加病理模板
+            'sections': ['tissue_architecture', 'cellular_features', 'diagnosis'],
+            'impression': True
+        },
         'abdomen_ct': {
             'sections': ['liver', 'kidney', 'pancreas', 'spleen'],
             'impression': True
@@ -149,9 +161,15 @@ class MedicalImageAnalyzer:
             num_beams = 5
         
         # 生成描述
-        inputs = self.processor(images=image, text=prompt, return_tensors="pt").to(
-            self.device, dtype=torch.float16 if self.precision == 'fp16' else torch.float32
-        )
+        inputs = self.processor(images=image, text=prompt, return_tensors="pt")
+        
+        # 正确处理输入张量的设备和dtype
+        # input_ids 必须保持 long 类型，pixel_values 可以是 float16
+        inputs = {
+            k: v.to(self.device) if k == 'input_ids' else 
+               v.to(self.device, dtype=torch.float16 if self.precision == 'fp16' and self.device == 'cuda' else torch.float32)
+            for k, v in inputs.items()
+        }
         
         with torch.no_grad():
             generated_ids = self.model.generate(
@@ -184,9 +202,14 @@ class MedicalImageAnalyzer:
             回答文本
         """
         # 准备输入
-        inputs = self.processor(images=image, text=question, return_tensors="pt").to(
-            self.device, dtype=torch.float16 if self.precision == 'fp16' else torch.float32
-        )
+        inputs = self.processor(images=image, text=question, return_tensors="pt")
+        
+        # 正确处理输入张量的设备和dtype
+        inputs = {
+            k: v.to(self.device) if k == 'input_ids' else 
+               v.to(self.device, dtype=torch.float16 if self.precision == 'fp16' and self.device == 'cuda' else torch.float32)
+            for k, v in inputs.items()
+        }
         
         # 生成回答
         with torch.no_grad():
