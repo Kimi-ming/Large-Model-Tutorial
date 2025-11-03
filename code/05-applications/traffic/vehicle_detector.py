@@ -512,6 +512,7 @@ def main():
     
     # 分割参数
     parser.add_argument('--sam-model', type=str, choices=['vit_h', 'vit_l', 'vit_b'],
+                        default='vit_b',  # 默认使用vit_b（速度和精度平衡）
                         help='SAM模型（用于分割任务）')
     parser.add_argument('--visualize', action='store_true', help='生成可视化结果')
     

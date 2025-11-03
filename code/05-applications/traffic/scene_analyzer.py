@@ -171,7 +171,8 @@ class TrafficSceneAnalyzer:
             'type': "What type of accident is shown?",
             'severity': "How severe is this accident?",
             'vehicles': "How many vehicles are involved?",
-            'injuries': "Are there any injuries?"
+            'injuries': "Are there any injuries?",
+            'cause': "What might be the possible cause of this accident?"
         }
         
         results = {}
@@ -186,14 +187,43 @@ class TrafficSceneAnalyzer:
             answer = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
             results[key] = answer
         
+        # 判断严重程度（修复逻辑错误）
+        severity_text = results['severity'].lower()
+        if 'severe' in severity_text or 'serious' in severity_text or 'critical' in severity_text:
+            severity = 'high'
+        elif 'moderate' in severity_text or 'medium' in severity_text:
+            severity = 'medium'
+        else:
+            severity = 'low'
+        
+        # 判断是否需要救援
+        injuries_suspected = 'yes' in results['injuries'].lower() or 'injury' in results['injuries'].lower()
+        emergency_needed = severity == 'high' or injuries_suspected
+        
+        # 提取车辆数量
+        vehicles_involved = self._extract_number(results['vehicles'])
+        
+        # 生成车辆详情（简化版）
+        vehicles_detail = []
+        for i in range(min(vehicles_involved, 3)):  # 最多3辆
+            vehicles_detail.append({
+                'vehicle_id': i + 1,
+                'type': 'car',  # 简化：默认轿车
+                'damage_level': severity,
+                'damage_area': 'front' if i == 0 else 'rear'
+            })
+        
         # 生成结构化报告
         return {
             'accident_type': results['type'],
-            'severity': 'high' if 'severe' in results['severity'].lower() else 'medium',
-            'vehicles_involved': self._extract_number(results['vehicles']),
-            'injuries_suspected': 'yes' in results['injuries'].lower() or 'injury' in results['injuries'].lower(),
+            'severity': severity,
+            'vehicles_involved': vehicles_involved,
+            'vehicles': vehicles_detail,
+            'injuries_suspected': injuries_suspected,
+            'emergency_services_needed': emergency_needed,
             'scene_description': self.generate_description(image, 'high'),
-            'recommendation': '立即通知救援部门' if 'high' in results['severity'] else '清理现场'
+            'possible_cause': results['cause'],
+            'recommendation': '立即通知救援部门' if emergency_needed else '清理现场，快速理赔'
         }
     
     def _get_recommendation(self, anomaly_type: str, severity: str) -> str:
