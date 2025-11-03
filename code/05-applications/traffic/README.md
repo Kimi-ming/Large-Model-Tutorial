@@ -57,6 +57,14 @@ python generate_examples.py
 
 > **注意**：这些是简化的示例图片，仅用于演示工具使用方式。实际应用中应使用真实的交通监控数据。
 
+### ⚠️ 重要说明
+
+**车辆分割功能**需要SAM模型：
+- 命令行：默认使用 `--sam-model vit_b`
+- Python API：必须在初始化时指定 `sam_model='vit_b'`
+
+**交通流量统计**功能（车辆计数、拥堵检测）为P2阶段规划内容，当前版本暂未实现。
+
 ### 基本用法
 
 由于Python模块导入限制（目录名包含数字和破折号），推荐使用以下方式：
@@ -93,12 +101,19 @@ sys.path.insert(0, 'code/05-applications/traffic')
 # 加载车辆检测器
 exec(open('code/05-applications/traffic/vehicle_detector.py').read(), globals())
 
-# 使用检测器
+# 车型识别（无需SAM）
 detector = VehicleDetector(device='cuda')
 image = detector.load_image('traffic_scene.jpg')
 result = detector.detect_vehicles(image)
-
 print(f"检测到 {len(result['vehicles'])} 辆车")
+
+# 车辆分割（需要SAM）
+detector_with_sam = VehicleDetector(
+    device='cuda',
+    sam_model='vit_b'  # 必须指定
+)
+segments = detector_with_sam.segment_vehicles(image)
+print(f"分割出 {len(segments)} 辆车")
 ```
 
 ## 核心功能演示
