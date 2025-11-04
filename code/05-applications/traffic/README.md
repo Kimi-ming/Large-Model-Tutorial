@@ -59,6 +59,12 @@ python generate_examples.py
 
 ### ⚠️ 重要说明
 
+**车辆检测限制**：
+- 当前为简化版零样本分类（检测图像整体的车辆类型）
+- `bbox`覆盖全图，不提供精确定位
+- 不包含车辆颜色、车道位置等详细属性
+- 完整的目标检测（精确定位+属性）建议使用YOLOv8
+
 **车辆分割功能**需要SAM模型：
 - 命令行：默认使用 `--sam-model vit_b`
 - Python API：必须在初始化时指定 `sam_model='vit_b'`
@@ -127,14 +133,15 @@ python vehicle_detector.py \
     --output results/vehicles.json \
     --visualize
 
-# 输出示例
+# 输出示例（简化版零样本分类）
 # {
 #   "vehicles": [
-#     {"type": "car", "confidence": 0.92, "bbox": [120, 300, 250, 180]},
-#     {"type": "truck", "confidence": 0.88, "bbox": [450, 280, 320, 240]}
+#     {"type": "car", "confidence": 0.92, "bbox": [0, 0, 1280, 720], "position": "center"},
+#     {"type": "truck", "confidence": 0.88, "bbox": [0, 0, 1280, 720], "position": "center"}
 #   ],
 #   "total_count": 2
 # }
+# 注意：bbox覆盖全图，position固定为center（未实现精确定位）
 ```
 
 ### 2. 场景描述
