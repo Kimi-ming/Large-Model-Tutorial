@@ -1,0 +1,122 @@
+# NVIDIA GPU Docker镜像 - 视觉大模型教程
+# 基于CUDA 11.8 + PyTorch 2.0
+# 适用于：模型训练、推理、部署
+
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=UTF-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:$PATH \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# 设置工作目录
+WORKDIR /workspace
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python和开发工具
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    python3.10-venv \
+    # 构建工具
+    build-essential \
+    cmake \
+    git \
+    wget \
+    curl \
+    # 图像处理库
+    libopencv-dev \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    # 其他工具
+    vim \
+    htop \
+    tmux \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建Python符号链接
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/python3.10 /usr/bin/python3 && \
+    python -m pip install --upgrade pip setuptools wheel
+
+# 复制项目文件
+COPY requirements.txt /workspace/
+COPY requirements-dev.txt /workspace/
+
+# 安装Python依赖
+# 分层安装以优化缓存
+RUN pip install --no-cache-dir \
+    torch==2.0.1 \
+    torchvision==0.15.2 \
+    torchaudio==2.0.2 \
+    --index-url https://download.pytorch.org/whl/cu118
+
+# 安装其他依赖
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 安装开发依赖（可选，用于开发环境）
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# 复制项目代码
+COPY . /workspace/
+
+# 设置Python路径
+ENV PYTHONPATH=/workspace:$PYTHONPATH
+
+# 创建必要的目录
+RUN mkdir -p /workspace/logs \
+    /workspace/outputs \
+    /workspace/models \
+    /workspace/data \
+    /workspace/checkpoints
+
+# 安装项目（可编辑模式）
+RUN pip install -e .
+
+# 暴露端口
+# 8000: FastAPI服务
+# 8888: Jupyter Notebook
+# 6006: TensorBoard
+EXPOSE 8000 8888 6006
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import torch; assert torch.cuda.is_available()" || exit 1
+
+# 默认启动命令（可被覆盖）
+CMD ["/bin/bash"]
+
+# 使用说明：
+# 构建镜像：
+#   docker build -f docker/Dockerfile.nvidia -t large-model-tutorial:nvidia .
+#
+# 运行容器（交互式）：
+#   docker run --gpus all -it --rm \
+#     -v $(pwd):/workspace \
+#     -p 8000:8000 \
+#     large-model-tutorial:nvidia
+#
+# 运行容器（后台服务）：
+#   docker run --gpus all -d \
+#     -v $(pwd):/workspace \
+#     -p 8000:8000 \
+#     --name vlm-tutorial \
+#     large-model-tutorial:nvidia \
+#     python code/04-deployment/api-server/app.py
+#
+# 运行Jupyter：
+#   docker run --gpus all -it --rm \
+#     -v $(pwd):/workspace \
+#     -p 8888:8888 \
+#     large-model-tutorial:nvidia \
+#     jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+

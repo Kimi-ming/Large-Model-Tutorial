@@ -1,0 +1,229 @@
+# Docker Compose配置 - 视觉大模型教程
+# 快速启动完整的开发和部署环境
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # NVIDIA GPU开发环境
+  # ===========================================
+  nvidia-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nvidia
+    image: large-model-tutorial:nvidia
+    container_name: vlm-nvidia-dev
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ../:/workspace
+      - nvidia-models:/workspace/models
+      - nvidia-data:/workspace/data
+      - nvidia-outputs:/workspace/outputs
+    ports:
+      - "8000:8000"   # API服务
+      - "8888:8888"   # Jupyter
+      - "6006:6006"   # TensorBoard
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    networks:
+      - vlm-network
+
+  # ===========================================
+  # NVIDIA GPU API服务
+  # ===========================================
+  nvidia-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nvidia
+    image: large-model-tutorial:nvidia
+    container_name: vlm-nvidia-api
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=openai/clip-vit-base-patch32
+      - DEVICE=cuda
+    volumes:
+      - ../:/workspace
+      - nvidia-models:/workspace/models
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    command: python code/04-deployment/api-server/app.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - vlm-network
+    depends_on:
+      - redis
+
+  # ===========================================
+  # Jupyter Notebook服务
+  # ===========================================
+  jupyter:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nvidia
+    image: large-model-tutorial:nvidia
+    container_name: vlm-jupyter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - JUPYTER_ENABLE_LAB=yes
+    volumes:
+      - ../:/workspace
+      - nvidia-models:/workspace/models
+      - nvidia-data:/workspace/data
+    ports:
+      - "8889:8888"
+    command: >
+      jupyter notebook
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --allow-root
+      --NotebookApp.token=''
+      --NotebookApp.password=''
+    networks:
+      - vlm-network
+
+  # ===========================================
+  # Redis缓存服务（用于API结果缓存）
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: vlm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - vlm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ===========================================
+  # TensorBoard可视化服务
+  # ===========================================
+  tensorboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.nvidia
+    image: large-model-tutorial:nvidia
+    container_name: vlm-tensorboard
+    volumes:
+      - ../logs:/workspace/logs
+      - ../outputs:/workspace/outputs
+    ports:
+      - "6007:6006"
+    command: tensorboard --logdir=/workspace/logs --host=0.0.0.0 --port=6006
+    networks:
+      - vlm-network
+
+  # ===========================================
+  # 昇腾NPU开发环境（需要在昇腾服务器上运行）
+  # ===========================================
+  ascend-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.huawei
+    image: large-model-tutorial:ascend
+    container_name: vlm-ascend-dev
+    devices:
+      - /dev/davinci0
+      - /dev/davinci_manager
+      - /dev/devmm_svm
+      - /dev/hisi_hdc
+    volumes:
+      - /usr/local/Ascend/driver:/usr/local/Ascend/driver
+      - ../:/workspace
+      - ascend-models:/workspace/models
+      - ascend-data:/workspace/data
+      - ascend-outputs:/workspace/outputs
+    ports:
+      - "8002:8000"
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    networks:
+      - vlm-network
+    profiles:
+      - ascend  # 只在指定profile时启动
+
+# ===========================================
+# 数据卷定义
+# ===========================================
+volumes:
+  nvidia-models:
+    driver: local
+  nvidia-data:
+    driver: local
+  nvidia-outputs:
+    driver: local
+  ascend-models:
+    driver: local
+  ascend-data:
+    driver: local
+  ascend-outputs:
+    driver: local
+  redis-data:
+    driver: local
+
+# ===========================================
+# 网络定义
+# ===========================================
+networks:
+  vlm-network:
+    driver: bridge
+
+# ===========================================
+# 使用说明
+# ===========================================
+# 
+# 1. 启动NVIDIA开发环境：
+#    docker-compose up -d nvidia-dev
+#    docker-compose exec nvidia-dev bash
+#
+# 2. 启动完整的API服务栈：
+#    docker-compose up -d nvidia-api redis
+#
+# 3. 启动Jupyter Notebook：
+#    docker-compose up -d jupyter
+#    访问: http://localhost:8889
+#
+# 4. 启动所有NVIDIA相关服务：
+#    docker-compose up -d nvidia-dev nvidia-api jupyter redis tensorboard
+#
+# 5. 启动昇腾开发环境（需要在昇腾服务器上）：
+#    docker-compose --profile ascend up -d ascend-dev
+#
+# 6. 查看服务状态：
+#    docker-compose ps
+#
+# 7. 查看服务日志：
+#    docker-compose logs -f nvidia-api
+#
+# 8. 停止所有服务：
+#    docker-compose down
+#
+# 9. 清理数据卷：
+#    docker-compose down -v
+#
+# 10. 重新构建镜像：
+#     docker-compose build --no-cache
+
