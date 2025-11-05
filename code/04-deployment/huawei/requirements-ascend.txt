@@ -1,0 +1,61 @@
+# 华为昇腾NPU部署依赖
+# 这些依赖应该在昇腾环境中安装
+
+# 基础依赖（从主requirements.txt精简而来，排除PyTorch）
+# 注意：昇腾环境使用torch-npu，不使用标准PyTorch
+
+# 视觉大模型
+transformers>=4.35.0
+pillow==10.1.0
+opencv-python==4.8.1.78
+
+# 数据处理
+numpy==1.24.3
+pandas==2.1.3
+scikit-learn==1.3.2
+
+# 图像处理
+albumentations==1.3.1
+
+# 模型微调（PEFT支持昇腾）
+peft==0.6.2
+accelerate==0.25.0
+
+# 模型部署
+onnx==1.15.0
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# 配置和日志
+pyyaml==6.0.1
+python-dotenv==1.0.0
+loguru==0.7.2
+
+# 可视化
+matplotlib==3.8.2
+seaborn==0.13.0
+tqdm==4.66.1
+
+# HTTP请求
+requests==2.31.0
+aiohttp==3.9.1
+
+# 数据集
+huggingface-hub==0.19.4
+datasets==2.15.0
+
+# 工具
+fire==0.5.0
+
+# 昇腾特定依赖
+# 注意：这些需要在昇腾环境中安装
+# torch-npu：昇腾PyTorch适配
+# apex：混合精度训练（昇腾版本）
+
+# 安装说明：
+# 1. 基础镜像应该已包含 torch-npu 和 apex
+# 2. ONNX Runtime 使用标准版本即可
+# 3. 不要安装标准的 PyTorch（会与 torch-npu 冲突）
+

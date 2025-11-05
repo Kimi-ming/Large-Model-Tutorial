@@ -1,0 +1,217 @@
+# 基础训练配置文件
+# 适用于大多数视觉大模型微调任务
+
+# ===========================================
+# 模型配置
+# ===========================================
+model:
+  # 模型名称（HuggingFace模型ID或本地路径）
+  name: "openai/clip-vit-base-patch32"
+  
+  # 分类任务的类别数（根据你的数据集调整）
+  num_classes: 10
+  
+  # 是否冻结backbone（只训练分类头）
+  freeze_backbone: false
+  
+  # Dropout率
+  dropout: 0.1
+
+# ===========================================
+# 数据配置
+# ===========================================
+data:
+  # 训练数据目录
+  train_dir: "data/train"
+  
+  # 验证数据目录
+  val_dir: "data/val"
+  
+  # 测试数据目录（可选）
+  test_dir: "data/test"
+  
+  # 批大小
+  batch_size: 32
+  
+  # 数据加载器的worker数量
+  num_workers: 4
+  
+  # 是否使用数据增强
+  augmentation: true
+  
+  # 图像尺寸
+  image_size: 224
+  
+  # 验证集比例（如果没有单独的验证集）
+  val_split: 0.1
+
+# ===========================================
+# 训练配置
+# ===========================================
+training:
+  # 训练轮数
+  epochs: 50
+  
+  # 学习率
+  learning_rate: 1e-5
+  
+  # 权重衰减（L2正则化）
+  weight_decay: 0.01
+  
+  # 学习率预热步数
+  warmup_steps: 500
+  
+  # 梯度裁剪阈值（0表示不裁剪）
+  gradient_clip: 1.0
+  
+  # 梯度累积步数（模拟更大的batch size）
+  accumulation_steps: 1
+  
+  # 是否使用混合精度训练（FP16）
+  mixed_precision: true
+  
+  # 设备（cuda, cpu, 或指定GPU如cuda:0）
+  device: "cuda"
+  
+  # 随机种子（用于可重复性）
+  seed: 42
+
+# ===========================================
+# 优化器配置
+# ===========================================
+optimizer:
+  # 优化器类型（adam, adamw, sgd）
+  type: "adamw"
+  
+  # Adam/AdamW的beta参数
+  betas: [0.9, 0.999]
+  
+  # epsilon参数
+  eps: 1e-8
+  
+  # 是否使用AMSGrad
+  amsgrad: false
+
+# ===========================================
+# 学习率调度器配置
+# ===========================================
+scheduler:
+  # 调度器类型（cosine, linear, step, plateau）
+  type: "cosine"
+  
+  # CosineAnnealing的T_max（总步数）
+  T_max: 50
+  
+  # 最小学习率
+  eta_min: 1e-7
+  
+  # StepLR的步长
+  step_size: 10
+  
+  # StepLR的衰减率
+  gamma: 0.1
+  
+  # ReduceLROnPlateau的耐心值
+  patience: 5
+
+# ===========================================
+# 检查点配置
+# ===========================================
+checkpoint:
+  # 检查点保存目录
+  save_dir: "checkpoints"
+  
+  # 每N个epoch保存一次
+  save_every: 5
+  
+  # 保留最近N个检查点
+  keep_last_n: 3
+  
+  # 是否保存最佳模型
+  save_best: true
+  
+  # 监控的指标（loss, accuracy, f1等）
+  monitor: "val_accuracy"
+  
+  # 监控模式（min或max）
+  monitor_mode: "max"
+
+# ===========================================
+# 早停配置
+# ===========================================
+early_stopping:
+  # 是否启用早停
+  enabled: true
+  
+  # 耐心值（多少个epoch没有改善就停止）
+  patience: 7
+  
+  # 最小改善幅度
+  min_delta: 0.001
+  
+  # 监控的指标
+  monitor: "val_accuracy"
+  
+  # 监控模式
+  mode: "max"
+
+# ===========================================
+# 日志配置
+# ===========================================
+logging:
+  # 日志保存目录
+  log_dir: "logs"
+  
+  # 每N步打印一次日志
+  log_every: 100
+  
+  # 是否使用TensorBoard
+  use_tensorboard: true
+  
+  # TensorBoard日志目录
+  tensorboard_dir: "runs"
+  
+  # 是否使用Weights & Biases
+  use_wandb: false
+  
+  # W&B项目名称
+  wandb_project: "vision-model-tutorial"
+  
+  # W&B运行名称（留空自动生成）
+  wandb_run_name: null
+
+# ===========================================
+# 评估配置
+# ===========================================
+evaluation:
+  # 每N个epoch评估一次
+  eval_every: 1
+  
+  # 评估指标列表
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+  
+  # 是否计算混淆矩阵
+  confusion_matrix: true
+  
+  # 是否保存预测结果
+  save_predictions: false
+
+# ===========================================
+# 使用说明
+# ===========================================
+# 1. 基本使用：
+#    python train.py --config configs/base.yaml
+#
+# 2. 覆盖特定参数：
+#    python train.py --config configs/base.yaml --batch-size 64 --lr 2e-5
+#
+# 3. 从检查点恢复：
+#    python train.py --config configs/base.yaml --resume checkpoints/checkpoint_epoch_10.pth
+#
+# 4. 多GPU训练：
+#    CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --config configs/base.yaml
+
