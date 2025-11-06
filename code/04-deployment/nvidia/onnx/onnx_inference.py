@@ -33,11 +33,23 @@ class ONNXCLIPInferenceService:
         """
         print(f"🚀 初始化ONNX CLIP推理服务...")
         
-        # 配置providers
+        # 检查可用的providers
+        available_providers = ort.get_available_providers()
+        print(f"📋 可用的Execution Providers: {available_providers}")
+        
+        # 智能选择providers
         if use_gpu:
-            providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+            if 'CUDAExecutionProvider' in available_providers:
+                providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                print(f"✅ 使用GPU推理 (CUDA)")
+            else:
+                providers = ['CPUExecutionProvider']
+                print(f"⚠️  CUDA不可用，回退到CPU推理")
+                print(f"💡 提示: 安装 onnxruntime-gpu 以启用GPU加速")
+                print(f"   pip install onnxruntime-gpu")
         else:
             providers = ['CPUExecutionProvider']
+            print(f"✅ 使用CPU推理")
         
         # 加载视觉编码器
         print(f"📦 加载视觉编码器: {vision_model_path}")

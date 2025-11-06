@@ -50,6 +50,7 @@ RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
 
 # 复制项目文件
 COPY requirements.txt /workspace/
+COPY requirements-gpu.txt /workspace/
 COPY requirements-dev.txt /workspace/
 
 # 安装Python依赖
@@ -60,8 +61,8 @@ RUN pip install --no-cache-dir \
     torchaudio==2.0.2 \
     --index-url https://download.pytorch.org/whl/cu118
 
-# 安装其他依赖
-RUN pip install --no-cache-dir -r requirements.txt
+# 安装GPU版本依赖（包含 onnxruntime-gpu）
+RUN pip install --no-cache-dir -r requirements-gpu.txt
 
 # 安装开发依赖（可选，用于开发环境）
 RUN pip install --no-cache-dir -r requirements-dev.txt

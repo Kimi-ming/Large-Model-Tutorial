@@ -79,10 +79,12 @@ RUN pip install --no-cache-dir \
     fire==0.5.0
 
 # 安装昇腾特定依赖
+# 注意：torch-npu 需要从华为官方源或基础镜像中获取，不能使用PyPI版本
+# 基础镜像 ascend-pytorch:23.0.RC3 已包含 torch 和 torch_npu
 RUN pip install --no-cache-dir \
-    onnxruntime==1.16.3 \
-    torch-npu \
-    apex
+    onnxruntime==1.16.3
+# apex 需要从源码安装或使用预编译包
+# RUN pip install --no-cache-dir apex  # 如需使用请从源码安装
 
 # 安装CLIP（从源码安装）
 RUN pip install --no-cache-dir git+https://github.com/openai/CLIP.git
