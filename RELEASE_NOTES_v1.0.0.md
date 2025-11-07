@@ -314,11 +314,11 @@
 - 模型训练
 - 效果评估
 
-✅ **CLIP推理教程** (`02_clip_inference_tutorial.ipynb`)
-- CLIP模型原理
-- 图文匹配示例
-- 零样本分类
-- 跨模态检索
+✅ **全参数微调教程** (`02_full_finetuning_tutorial.ipynb`)
+- 完整的微调流程
+- 模型训练和验证
+- 效果评估
+- 权重保存和加载
 
 ✅ **SAM分割教程** (`03_sam_segmentation_tutorial.ipynb`)
 - SAM模型原理
