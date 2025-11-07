@@ -57,6 +57,15 @@ class QwenVLInference:
         print(f"🚀 加载Qwen-VL模型: {model_name}")
         print(f"📍 使用设备: {self.device}")
         
+        # 根据实际设备选择dtype
+        # CPU必须使用float32，GPU可以使用float16加速
+        if self.device == "cpu":
+            dtype = torch.float32
+            print(f"💻 使用精度: FP32 (CPU模式)")
+        else:
+            dtype = torch.float16
+            print(f"⚡ 使用精度: FP16 (GPU加速)")
+        
         try:
             # 加载tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -69,7 +78,7 @@ class QwenVLInference:
                 model_name,
                 device_map=device if device == "auto" else None,
                 trust_remote_code=trust_remote_code,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                torch_dtype=dtype
             ).eval()
             
             if device != "auto" and device != "cpu":
