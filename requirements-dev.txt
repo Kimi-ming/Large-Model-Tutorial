@@ -1,5 +1,8 @@
 # 开发环境额外依赖
--r requirements.txt
+# 注意：不再引用requirements.txt，避免在GPU环境覆盖onnxruntime-gpu
+# 请根据环境选择：
+# - GPU环境：先安装 requirements-gpu.txt
+# - CPU环境：先安装 requirements.txt
 
 # 代码质量
 black==23.11.0

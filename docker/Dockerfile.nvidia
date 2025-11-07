@@ -65,6 +65,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir -r requirements-gpu.txt
 
 # 安装开发依赖（可选，用于开发环境）
+# 注意：requirements-dev.txt已移除对requirements.txt的引用，避免覆盖onnxruntime-gpu
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
 # 复制项目代码
