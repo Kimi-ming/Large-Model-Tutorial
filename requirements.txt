@@ -5,6 +5,7 @@
 torch>=2.0.0
 torchvision>=0.15.0
 transformers>=4.35.0
+transformers_stream_generator>=0.0.4  # Qwen-VL流式生成支持
 
 # 视觉大模型
 clip @ git+https://github.com/openai/CLIP.git

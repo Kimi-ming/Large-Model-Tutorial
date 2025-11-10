@@ -8,6 +8,7 @@ torchaudio>=2.0.0
 
 # Transformers和相关库
 transformers>=4.35.0
+transformers_stream_generator>=0.0.4  # Qwen-VL流式生成支持
 tokenizers>=0.15.0
 accelerate>=0.25.0
 peft>=0.6.2

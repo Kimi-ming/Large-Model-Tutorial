@@ -1,0 +1,209 @@
+name: 💬 使用反馈
+description: 分享使用体验和改进建议
+title: "[反馈] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您使用Large-Model-Tutorial！您的反馈对我们非常重要。
+        
+        **提示**: 这个模板用于收集使用体验、改进建议等一般性反馈。
+        如果是具体的Bug，请使用[Bug报告](./bug_report.yml)模板。
+
+  - type: dropdown
+    id: experience_level
+    attributes:
+      label: 您的经验水平
+      description: 在视觉大模型领域的经验
+      options:
+        - 初学者
+        - 有一定基础
+        - 中级开发者
+        - 高级开发者
+        - 专家
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage_scenario
+    attributes:
+      label: 主要使用场景
+      description: 您主要在什么场景下使用本教程
+      options:
+        - 学习研究
+        - 课程项目
+        - 工作项目
+        - 科研开发
+        - 个人兴趣
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: satisfaction
+    attributes:
+      label: 整体满意度
+      description: 对教程的整体评价
+      options:
+        - ⭐⭐⭐⭐⭐ 非常满意
+        - ⭐⭐⭐⭐ 比较满意
+        - ⭐⭐⭐ 一般
+        - ⭐⭐ 不太满意
+        - ⭐ 很不满意
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: used_features
+    attributes:
+      label: 您使用过的功能
+      description: 选择您已经使用过的功能（多选）
+      options:
+        - label: 模型推理示例
+        - label: 模型微调（LoRA/Full Fine-tuning）
+        - label: 数据处理工具
+        - label: 多平台部署（NVIDIA/华为昇腾）
+        - label: Docker容器化
+        - label: API服务
+        - label: Jupyter Notebook教程
+        - label: 应用案例代码
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_works_well
+    attributes:
+      label: 👍 做得好的地方
+      description: 您觉得哪些方面做得很好
+      placeholder: |
+        - 文档详细清晰
+        - 代码示例完整
+        - 学习路径合理
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_needs_improvement
+    attributes:
+      label: 📈 需要改进的地方
+      description: 您觉得哪些方面需要改进
+      placeholder: |
+        - 某些文档不够清晰
+        - 缺少某个功能
+        - 代码运行有问题
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestions
+    attributes:
+      label: 💡 具体建议
+      description: 您有什么具体的改进建议
+      placeholder: |
+        1. 建议1...
+        2. 建议2...
+    validations:
+      required: false
+
+  - type: textarea
+    id: missing_features
+    attributes:
+      label: 🎯 希望增加的功能
+      description: 您希望增加哪些功能或内容
+      placeholder: |
+        - 希望支持XX模型
+        - 希望增加XX应用场景
+        - 希望有XX方面的文档
+        - ...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: documentation_quality
+    attributes:
+      label: 📚 文档质量评价
+      description: 对文档的评价
+      options:
+        - ⭐⭐⭐⭐⭐ 非常清晰详细
+        - ⭐⭐⭐⭐ 比较清晰
+        - ⭐⭐⭐ 一般
+        - ⭐⭐ 不够清晰
+        - ⭐ 很难理解
+    validations:
+      required: true
+
+  - type: dropdown
+    id: code_quality
+    attributes:
+      label: 💻 代码质量评价
+      description: 对代码示例的评价
+      options:
+        - ⭐⭐⭐⭐⭐ 代码优秀
+        - ⭐⭐⭐⭐ 代码良好
+        - ⭐⭐⭐ 代码一般
+        - ⭐⭐ 代码需改进
+        - ⭐ 代码有问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: learning_path
+    attributes:
+      label: 🛤️ 学习路径体验
+      description: 您的学习路径和进度如何
+      placeholder: |
+        - 已完成哪些章节
+        - 花费的时间
+        - 遇到的主要困难
+        - 学习效果如何
+    validations:
+      required: false
+
+  - type: dropdown
+    id: recommend
+    attributes:
+      label: 📣 推荐意愿
+      description: 是否会推荐给其他人
+      options:
+        - 一定会推荐
+        - 可能会推荐
+        - 不确定
+        - 可能不会推荐
+        - 不会推荐
+    validations:
+      required: true
+
+  - type: textarea
+    id: success_story
+    attributes:
+      label: 🎉 成功案例（可选）
+      description: 分享您使用本教程的成功经验
+      placeholder: |
+        如果您使用本教程成功完成了某个项目或任务，
+        欢迎分享您的经验！（可选）
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 其他想说的
+      description: 其他任何想要反馈的内容
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **感谢您的反馈！**
+        
+        您的意见将帮助我们持续改进教程质量。
+        如果您在使用过程中遇到具体问题，也可以：
+        - 提交 [Bug报告](./bug_report.yml)
+        - 提出 [功能请求](./feature_request.yml)
+        - 在 [Discussions](https://github.com/Kimi-ming/Large-Model-Tutorial/discussions) 参与讨论
+
