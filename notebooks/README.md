@@ -46,6 +46,116 @@
 
 ---
 
+### 3. SAM图像分割教程
+**文件**: `03_sam_segmentation_tutorial.ipynb`
+
+**内容**:
+- SAM模型原理
+- 图像分割实践
+- 交互式标注
+- 批量处理
+
+**适合人群**: 初学者和中级用户
+
+**预计时间**: 30-40分钟
+
+---
+
+### 4. BLIP-2视觉问答教程
+**文件**: `04_blip2_vqa_tutorial.ipynb`
+
+**内容**:
+- BLIP-2模型介绍
+- 图像描述生成
+- 视觉问答实践
+- 性能评估
+
+**适合人群**: 初学者和中级用户
+
+**预计时间**: 30-40分钟
+
+---
+
+### 5. InternVL vs Qwen-VL对比教程 🆕
+**文件**: `05_internvl_qwenvl_comparison.ipynb`
+
+**内容**:
+- InternVL和Qwen-VL模型介绍
+- 多任务性能对比（图像描述、VQA、OCR）
+- 中英文场景对比
+- 推理性能分析
+- 选型建议
+
+**适合人群**: 中级和高级用户
+
+**预计时间**: 45-60分钟
+
+**前置要求**:
+- 16GB+ GPU显存（推荐）
+- 理解视觉语言模型基础
+
+**亮点**:
+- ✨ 对比两个SOTA模型
+- ✨ 实际应用场景演示
+- ✨ 性能可视化分析
+- ✨ 选型决策指导
+
+---
+
+### 6. 端到端视觉AI项目实战 🆕
+**文件**: `06_end_to_end_visual_ai_project.ipynb`
+
+**内容**:
+- 完整项目架构设计
+- 多模型集成管理
+- 批量处理和优化
+- 结果可视化和报告生成
+- 部署方案和建议
+
+**适合人群**: 中级和高级用户
+
+**预计时间**: 60-90分钟
+
+**前置要求**:
+- 16GB+ GPU显存（推荐）
+- 完成基础教程
+- 理解软件工程基础
+
+**亮点**:
+- ✨ 真实业务场景实现
+- ✨ 模块化设计示例
+- ✨ 完整错误处理机制
+- ✨ 生产级代码质量
+
+---
+
+### 7. 性能优化实战教程 🆕
+**文件**: `07_performance_optimization.ipynb`
+
+**内容**:
+- 模型量化技术（INT8/FP16/BF16）
+- 批处理优化策略
+- KV Cache优化
+- Flash Attention加速
+- 性能profiling和分析
+
+**适合人群**: 中级和高级用户
+
+**预计时间**: 45-60分钟
+
+**前置要求**:
+- 16GB+ GPU显存
+- 理解模型推理基础
+- 完成基础教程
+
+**亮点**:
+- ✨ 系统的性能优化方法
+- ✨ 量化对比实验
+- ✨ 优化策略决策树
+- ✨ 2-5x速度提升
+
+---
+
 ## 🚀 快速开始
 
 ### 方法1：使用Jupyter Notebook
@@ -134,24 +244,41 @@ data/dogs/
 ## 💡 使用建议
 
 ### 1. 按顺序学习
-建议按照教程编号顺序学习：
-1. 先完成LoRA微调教程
-2. 再尝试全参数微调教程
+
+**初学者路径** (推荐):
+1. 📝 教程1: LoRA微调实战 (基础)
+2. 📝 教程3: SAM图像分割 (应用)
+3. 📝 教程4: BLIP-2视觉问答 (应用)
+4. 📝 教程5: InternVL vs Qwen-VL对比 (进阶)
+
+**进阶用户路径**:
+1. 📝 教程2: 全参数微调进阶
+2. 📝 教程5: InternVL vs Qwen-VL对比
+3. 📝 教程7: 性能优化实战
+4. 📝 教程6: 端到端项目实战
+
+**性能优化路径**:
+1. 📝 教程5: 模型对比 (了解不同模型性能)
+2. 📝 教程7: 性能优化实战 (量化、批处理)
+3. 📝 教程6: 端到端项目 (综合应用)
 
 ### 2. 实验和修改
 - 尝试修改超参数，观察效果
 - 使用自己的数据集进行实验
 - 记录实验结果和心得
+- 对比不同优化策略的效果
 
 ### 3. 保存结果
 - 定期保存Notebook
 - 保存训练好的模型
 - 记录实验配置和结果
+- 保存性能测试数据
 
 ### 4. 资源管理
 - 训练前检查GPU显存
 - 适当调整batch_size
 - 使用混合精度训练节省显存
+- 参考教程7的优化建议
 
 ---
 
@@ -239,15 +366,21 @@ model = PeftModel.from_pretrained(base_model, "outputs/my_model")
 ### 文档
 - [LoRA微调文档](../docs/02-模型微调技术/02-LoRA微调实践.md)
 - [全参数微调文档](../docs/02-模型微调技术/03-全参数微调.md)
+- [InternVL模型详解](../docs/01-模型调研与选型/08-InternVL模型详解.md) 🆕
+- [InternVL vs Qwen-VL对比](../docs/01-模型调研与选型/09-InternVL与Qwen-VL对比.md) 🆕
 - [数据准备文档](../docs/03-数据集准备/)
 
 ### 代码示例
 - [LoRA训练脚本](../code/02-fine-tuning/lora/)
 - [全参数微调脚本](../code/02-fine-tuning/full-finetuning/)
+- [InternVL推理代码](../code/01-model-evaluation/examples/internvl_inference.py) 🆕
+- [Qwen-VL推理代码](../code/01-model-evaluation/examples/qwen_vl_inference.py)
 
 ### 论文
 - [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
 - [CLIP: Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)
+- [InternVL: Scaling up Vision Foundation Models](https://arxiv.org/abs/2312.14238) 🆕
+- [Qwen-VL: A Frontier Large Vision-Language Model](https://arxiv.org/abs/2308.12966)
 
 ---
 
